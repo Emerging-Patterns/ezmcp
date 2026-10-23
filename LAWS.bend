@@ -17,7 +17,7 @@ import ./src/client.bend as Client
 # --- the specification's own words ---
 
 # the id a server's act sends back: a reply's id, a tool call's id; null
-# for no reply
+# for no reply or a batch
 def sent.id(lead: Server.Act) -> Value.Json:
   match lead:
     case Server.Quiet{}:
@@ -28,6 +28,8 @@ def sent.id(lead: Server.Act) -> Value.Json:
       Json.get(reply, "id")
     case Server.Run{id, name, args}:
       id
+    case Server.Batch{acts}:
+      Json.null()
 
 # whether a value has a member and not another
 def has.only(+val: Value.Json, yes: String, no: String) -> Bool:
@@ -225,9 +227,10 @@ law answer_id:
 # LAW: a tool's reply carries the call's id
 # MCP-RPC-5
 law ran_id:
+  for rev: String
   for id: Value.Json
   for result: Value.Json
-  {Json.get(Server.ran(id, result), "id") == id : Value.Json}
+  {Json.get(Server.ran(rev, id, result), "id") == id : Value.Json}
 
 # LAW: a successful reply has a result and no error
 # MCP-RPC-6
@@ -303,9 +306,10 @@ law not_v2_junk:
 # MCP-RPC-9
 law parse_error:
   for srv: Server.Server
+  for rev: String
   for text: String
   for e: {Json.parse(text) == None{} : Maybe<&2, Value.Json>}
-  {Server.step(srv, text)
+  {Server.step(srv, rev, text)
     == Server.Fault{Rpc.reply(Json.null(),
       Rpc.Err{Rpc.ParseError{}, "Parse error"})} : Server.Act}
 
@@ -331,6 +335,138 @@ law batch_junk:
   {Rpc.classify(Json.arr(items))
     == Rpc.Junk{Json.null(), "Invalid Request: not a JSON-RPC object"}
     : Rpc.Msg}
+
+# LAW: under a revision that receives no batches, an array is one invalid
+# request, a fault, and the revision is unchanged
+# MCP-RPC-10
+law array_refused:
+  for srv: Server.Server
+  for +rev: String
+  for items: List<&2, Value.Json>
+  for e: {Server.batches(rev) == False{} : Bool}
+  {Server.turn.parsed(srv, rev, Some{Json.arr(items)})
+    == Server.Turn{Server.Fault{Rpc.reply(Json.null(),
+      Rpc.Err{Rpc.InvalidRequest{}, "Invalid Request: not a JSON-RPC object"})},
+      rev} : Server.Turn}
+
+# LAW: only 2025-03-26 receives batches
+# MCP-RPC-12
+law batches_oldest:
+  for rev: String
+  {Server.batches(rev) == String.eq(rev, "2025-03-26") : Bool}
+
+# LAW: under 2025-03-26 an array is a batch, and the revision is unchanged
+# MCP-RPC-12
+law batch_turn:
+  for srv: Server.Server
+  for items: List<&2, Value.Json>
+  {Server.turn.parsed(srv, "2025-03-26", Some{Json.arr(items)})
+    == Server.Turn{Server.batch(srv, items), "2025-03-26"} : Server.Turn}
+
+# LAW: an empty batch is one invalid request, with a null id
+# MCP-RPC-12
+law batch_empty:
+  for srv: Server.Server
+  {Server.batch(srv, [])
+    == Server.Fault{Rpc.reply(Json.null(), Rpc.Err{Rpc.InvalidRequest{},
+      "Invalid Request: empty batch"})} : Server.Act}
+
+# LAW: any other batch is its elements' acts
+# MCP-RPC-12
+law batch_acts:
+  for srv: Server.Server
+  for i: Value.Json
+  for rest: List<&2, Value.Json>
+  {Server.batch(srv, i <> rest) == Server.Batch{Server.batch.all(srv, i <> rest)}
+    : Server.Act}
+
+# LAW: a batch's acts are one per element, in order
+# MCP-RPC-12
+law batch_all_each:
+  for srv: Server.Server
+  for i: Value.Json
+  for rest: List<&2, Value.Json>
+  {Server.batch.all(srv, i <> rest)
+    == Server.batch.one(srv, Rpc.classify(i)) <> Server.batch.all(srv, rest)
+    : List<&2, Server.Act>}
+
+# LAW: and none past the last element
+# MCP-RPC-12
+law batch_all_nil:
+  for srv: Server.Server
+  {Server.batch.all(srv, []) == [] : List<&2, Server.Act>}
+
+# LAW: an initialize in a batch is an invalid request with its id
+# MCP-RPC-12
+law batch_init:
+  for srv: Server.Server
+  for id: Value.Json
+  for params: Value.Json
+  {Server.batch.one(srv, Rpc.Ask{id, "initialize", params})
+    == Server.Send{Rpc.reply(id, Rpc.Err{Rpc.InvalidRequest{},
+      "Invalid Request: initialize must not be part of a batch"})}
+    : Server.Act}
+
+# LAW: any other request in a batch is answered as it would be alone
+# MCP-RPC-12
+law batch_ask:
+  for srv: Server.Server
+  for id: Value.Json
+  for +m: String
+  for params: Value.Json
+  for e: {String.eq(m, "initialize") == False{} : Bool}
+  {Server.batch.one(srv, Rpc.Ask{id, m, params})
+    == Server.handle(srv, Rpc.Ask{id, m, params}) : Server.Act}
+
+# LAW: a notification in a batch gets nothing back
+# MCP-RPC-12
+law batch_tell:
+  for srv: Server.Server
+  for m: String
+  for params: Value.Json
+  {Server.batch.one(srv, Rpc.Tell{m, params}) == Server.Quiet{} : Server.Act}
+
+# LAW: an element that is not a valid message is an invalid request, as it
+# would be alone
+# MCP-RPC-12
+law batch_junk_one:
+  for srv: Server.Server
+  for id: Value.Json
+  for why: String
+  {Server.batch.one(srv, Rpc.Junk{id, why})
+    == Server.handle(srv, Rpc.Junk{id, why}) : Server.Act}
+
+# LAW: a batch sends back nothing when no element has a reply
+# MCP-RPC-12
+law batch_reply_none:
+  for replies: List<&2, Maybe<&2, Value.Json>>
+  for e: {Server.batch.some(replies) == [] : List<&2, Value.Json>}
+  {Server.batch.reply(replies) == None{} : Maybe<&2, Value.Json>}
+
+# LAW: else the array of the replies
+# MCP-RPC-12
+law batch_reply_some:
+  for replies: List<&2, Maybe<&2, Value.Json>>
+  for r: Value.Json
+  for rest: List<&2, Value.Json>
+  for e: {Server.batch.some(replies) == r <> rest : List<&2, Value.Json>}
+  {Server.batch.reply(replies) == Some{Json.arr(r <> rest)}
+    : Maybe<&2, Value.Json>}
+
+# LAW: the replies are the elements' that have one, in order
+# MCP-RPC-12
+law batch_some_skip:
+  for rest: List<&2, Maybe<&2, Value.Json>>
+  {Server.batch.some(None{} <> rest) == Server.batch.some(rest)
+    : List<&2, Value.Json>}
+
+# LAW: an element's reply comes before the rest's
+# MCP-RPC-12
+law batch_some_keep:
+  for r: Value.Json
+  for rest: List<&2, Maybe<&2, Value.Json>>
+  {Server.batch.some(Some{r} <> rest) == r <> Server.batch.some(rest)
+    : List<&2, Value.Json>}
 
 # LAW: a message with no method that is not a response is an invalid request
 # MCP-RPC-10
@@ -455,13 +591,20 @@ law negotiate_echo:
 law negotiate_latest:
   for v: String
   for e: {Server.supported(v) == False{} : Bool}
-  {Server.negotiate(Some{v}) == Server.latest() : String}
+  {Server.negotiate(Some{v}) == "2025-11-25" : String}
 
 # LAW: whatever a client asks for, the answer is a revision ezmcp speaks
 # MCP-LIFE-2
 law negotiate_supported:
   for asked: Maybe<&2, String>
   {Server.supported(Server.negotiate(asked)) == True{} : Bool}
+
+# LAW: ezmcp supports exactly 2025-03-26, 2025-06-18 and 2025-11-25
+# MCP-LIFE-2
+law supported_revisions:
+  for v: String
+  {Server.supported(v) == Bool.or(String.eq(v, "2025-03-26"),
+    Bool.or(String.eq(v, "2025-06-18"), String.eq(v, "2025-11-25"))) : Bool}
 
 # LAW: the result's capabilities are the tool table's
 # MCP-LIFE-3
@@ -496,6 +639,77 @@ law ping_empty:
   for params: Value.Json
   {Server.dispatch(srv, "ping", params) == Server.Now{Rpc.Ok{Json.obj([])}}
     : Server.Step}
+
+# LAW: after an initialize, a stream is read by the revision answered to it
+# MCP-LIFE-5
+law session_init:
+  for rev: String
+  for id: Value.Json
+  for params: Value.Json
+  {Server.session(rev, Rpc.Ask{id, "initialize", params})
+    == Server.negotiate(Json.as_str(Json.get(params, "protocolVersion")))
+    : String}
+
+# LAW: any other request leaves the revision as it was
+# MCP-LIFE-5
+law session_ask:
+  for rev: String
+  for id: Value.Json
+  for +m: String
+  for params: Value.Json
+  for e: {String.eq(m, "initialize") == False{} : Bool}
+  {Server.session(rev, Rpc.Ask{id, m, params}) == rev : String}
+
+# LAW: so does a notification
+# MCP-LIFE-5
+law session_tell:
+  for rev: String
+  for m: String
+  for params: Value.Json
+  {Server.session(rev, Rpc.Tell{m, params}) == rev : String}
+
+# LAW: and a response
+# MCP-LIFE-5
+law session_answer:
+  for rev: String
+  for id: Value.Json
+  {Server.session(rev, Rpc.Answer{id}) == rev : String}
+
+# LAW: and an invalid request
+# MCP-LIFE-5
+law session_junk:
+  for rev: String
+  for id: Value.Json
+  for why: String
+  {Server.session(rev, Rpc.Junk{id, why}) == rev : String}
+
+# LAW: a message that is not a batch is acted on, and moves the revision, as
+# one message
+# MCP-LIFE-5
+law turn_one:
+  for srv: Server.Server
+  for rev: String
+  for v: Value.Json
+  {Server.turn.value(srv, rev, v, False{})
+    == Server.Turn{Server.handle(srv, Rpc.classify(v)),
+      Server.session(rev, Rpc.classify(v))} : Server.Turn}
+
+# LAW: text that is not JSON leaves the revision as it was
+# MCP-LIFE-5
+law turn_unparsed:
+  for srv: Server.Server
+  for rev: String
+  {Server.turn.parsed(srv, rev, None{})
+    == Server.Turn{Server.unparsed(), rev} : Server.Turn}
+
+# LAW: step is a turn's act
+# MCP-LIFE-5
+law step_turn:
+  for srv: Server.Server
+  for rev: String
+  for text: String
+  {Server.step(srv, rev, text) == Server.turn.act(Server.turn(srv, rev, text))
+    : Server.Act}
 
 # --- tools (MCP-TOOL) ---
 
@@ -661,12 +875,15 @@ law text_block:
   {Server.text(s) == Json.obj([("type", Json.str("text")), ("text", Json.str(s))])
     : Value.Json}
 
-# LAW: the reply to a tool call is a result holding the tool's result
+# LAW: the reply to a tool call is a result holding the tool's result, under
+# any revision but 2025-03-26
 # MCP-TOOL-5
 law ran_result:
+  for rev: String
   for id: Value.Json
   for result: Value.Json
-  {Json.get(Server.ran(id, result), "result") == result : Value.Json}
+  for e: {String.eq(rev, "2025-03-26") == False{} : Bool}
+  {Json.get(Server.ran(rev, id, result), "result") == result : Value.Json}
 
 # LAW: structured content is the value itself
 # MCP-TOOL-6
@@ -682,6 +899,56 @@ law structured_text:
   for bad: Bool
   {Json.items(Json.get(Server.structured(v, bad), "content"))
     == [Server.text(Json.print(v))] : List<&2, Value.Json>}
+
+# LAW: under 2025-03-26 the reply to a tool call has no structuredContent
+# MCP-TOOL-7
+law ran_unstructured:
+  for id: Value.Json
+  for result: Value.Json
+  {Json.has(Json.get(Server.ran("2025-03-26", id, result), "result"),
+    "structuredContent") == False{} : Bool}
+
+# LAW: and its result is the runner's, less structuredContent
+# MCP-TOOL-7
+law ran_old_result:
+  for id: Value.Json
+  for result: Value.Json
+  {Json.get(Server.ran("2025-03-26", id, result), "result")
+    == Server.without(result, "structuredContent") : Value.Json}
+
+# LAW: leaving a member out keeps every member with another key, in order
+# MCP-TOOL-7
+law without_keeps:
+  for +k: String
+  for v: Value.Json
+  for r: Value.Json
+  for +key: String
+  for e: {Value.find.eq(k, key) == False{} : Bool}
+  {Server.without.go(Value.JPair{k, v, r}, key)
+    == Value.JPair{k, v, Server.without.go(r, key)} : Value.Json}
+
+# LAW: and drops one with that key
+# MCP-TOOL-7
+law without_drops:
+  for +k: String
+  for v: Value.Json
+  for r: Value.Json
+  for +key: String
+  for e: {Value.find.eq(k, key) == True{} : Bool}
+  {Server.without.go(Value.JPair{k, v, r}, key) == Server.without.go(r, key)
+    : Value.Json}
+
+# LAW: a parsed member with another key is kept too
+# MCP-TOOL-7
+law without_keeps_bind:
+  for +src: String
+  for +num: U32
+  for v: Value.Json
+  for r: Value.Json
+  for +key: String
+  for e: {Value.span.eq(src, num, key) == False{} : Bool}
+  {Server.without.go(Value.JBind{src, num, v, r}, key)
+    == Value.JBind{src, num, v, Server.without.go(r, key)} : Value.Json}
 
 # --- streamable HTTP (MCP-HTTP) ---
 
@@ -700,64 +967,76 @@ law web_parts:
     == Web.route(srv, String.eq(Web.path.of(target), path),
       Web.origin.ok(origins, Http.headers.find(headers, "Origin")),
       String.eq(m, "POST"),
-      Web.version.ok(Http.headers.find(headers, "MCP-Protocol-Version")), body)
+      Http.headers.find(headers, "MCP-Protocol-Version"), body)
     : Web.Web}
 
-# LAW: a POST to the endpoint that passes the checks is the server's step
+# LAW: a POST to the endpoint that passes the checks is the server's step,
+# under the revision its header names
 # MCP-HTTP-1
+# MCP-HTTP-8
 law web_post:
   for srv: Server.Server
+  for +header: String
   for body: String
-  {Web.route(srv, True{}, True{}, True{}, True{}, body)
-    == Web.act(Server.step(srv, body)) : Web.Web}
+  for e: {Web.version.ok(header) == True{} : Bool}
+  {Web.route(srv, True{}, True{}, True{}, header, body)
+    == Web.act(Web.revision(header),
+      Server.step(srv, Web.revision(header), body)) : Web.Web}
 
 # LAW: a request's reply is 200 with one JSON body
 # MCP-HTTP-1
 law web_send:
+  for rev: String
   for reply: Value.Json
-  {Web.act(Server.Send{reply})
+  {Web.act(rev, Server.Send{reply})
     == Web.Now{200, [Http.H{"Content-Type", "application/json"}],
       Json.print(reply)} : Web.Web}
 
 # LAW: a tool call's reply is 200 with one JSON body
 # MCP-HTTP-1
 law web_ran:
+  for rev: String
   for id: Value.Json
   for result: Value.Json
-  {Web.ran(id, result)
+  {Web.ran(rev, id, result)
     == Web.Now{200, [Http.H{"Content-Type", "application/json"}],
-      Json.print(Server.ran(id, result))} : Web.Web}
+      Json.print(Server.ran(rev, id, result))} : Web.Web}
 
-# LAW: a tool call is run before the reply
+# LAW: a tool call is run, under the request's revision, before the reply
 # MCP-HTTP-1
 law web_run:
+  for rev: String
   for id: Value.Json
   for name: String
   for args: Value.Json
-  {Web.act(Server.Run{id, name, args}) == Web.Later{id, name, args} : Web.Web}
+  {Web.act(rev, Server.Run{id, name, args}) == Web.Later{rev, id, name, args}
+    : Web.Web}
 
 # LAW: a notification is accepted: 202, no body
 # MCP-HTTP-2
 law web_tell:
+  for rev: String
   for srv: Server.Server
   for m: String
   for params: Value.Json
-  {Web.act(Server.handle(srv, Rpc.Tell{m, params})) == Web.Now{202, [], ""}
+  {Web.act(rev, Server.handle(srv, Rpc.Tell{m, params})) == Web.Now{202, [], ""}
     : Web.Web}
 
 # LAW: a response is accepted: 202, no body
 # MCP-HTTP-2
 law web_answer:
+  for rev: String
   for srv: Server.Server
   for id: Value.Json
-  {Web.act(Server.handle(srv, Rpc.Answer{id})) == Web.Now{202, [], ""}
+  {Web.act(rev, Server.handle(srv, Rpc.Answer{id})) == Web.Now{202, [], ""}
     : Web.Web}
 
 # LAW: a message the server cannot accept is 400, with its JSON-RPC error
 # MCP-HTTP-3
 law web_fault:
+  for rev: String
   for reply: Value.Json
-  {Web.act(Server.Fault{reply})
+  {Web.act(rev, Server.Fault{reply})
     == Web.Now{400, [Http.H{"Content-Type", "application/json"}],
       Json.print(reply)} : Web.Web}
 
@@ -775,9 +1054,9 @@ law web_bad:
 # MCP-HTTP-4
 law web_not_post:
   for srv: Server.Server
-  for version: Bool
+  for header: String
   for body: String
-  {Web.route(srv, True{}, True{}, False{}, version, body)
+  {Web.route(srv, True{}, True{}, False{}, header, body)
     == Web.Now{405, [Http.H{"Allow", "POST"}], ""} : Web.Web}
 
 # LAW: a request whose Origin is not allowed is 403, whatever its method
@@ -785,9 +1064,9 @@ law web_not_post:
 law web_origin:
   for srv: Server.Server
   for is_post: Bool
-  for version: Bool
+  for header: String
   for body: String
-  {Web.route(srv, True{}, False{}, is_post, version, body)
+  {Web.route(srv, True{}, False{}, is_post, header, body)
     == Web.text(403, "Forbidden: Origin not allowed") : Web.Web}
 
 # LAW: a request with no Origin passes
@@ -853,8 +1132,10 @@ law origin_unlisted:
 # MCP-HTTP-6
 law web_version:
   for srv: Server.Server
+  for header: String
   for body: String
-  {Web.route(srv, True{}, True{}, True{}, False{}, body)
+  for e: {Web.version.ok(header) == False{} : Bool}
+  {Web.route(srv, True{}, True{}, True{}, header, body)
     == Web.text(400, "Bad Request: unsupported MCP-Protocol-Version")
     : Web.Web}
 
@@ -870,10 +1151,46 @@ law web_path:
   for srv: Server.Server
   for allowed: Bool
   for is_post: Bool
-  for version: Bool
+  for header: String
   for body: String
-  {Web.route(srv, False{}, allowed, is_post, version, body)
+  {Web.route(srv, False{}, allowed, is_post, header, body)
     == Web.text(404, "Not Found") : Web.Web}
+
+# LAW: a POST with no MCP-Protocol-Version is read by 2025-03-26
+# MCP-HTTP-8
+law revision_absent:
+  for v: String
+  for e: {String.is_empty(v) == True{} : Bool}
+  {Web.revision(v) == "2025-03-26" : String}
+
+# LAW: one with a header is read by the revision it names
+# MCP-HTTP-8
+law revision_named:
+  for v: String
+  for e: {String.is_empty(v) == False{} : Bool}
+  {Web.revision(v) == v : String}
+
+# LAW: a batch is run, under the request's revision, before the reply
+# MCP-HTTP-9
+law web_batch:
+  for rev: String
+  for acts: List<&2, Server.Act>
+  {Web.act(rev, Server.Batch{acts}) == Web.Many{rev, acts} : Web.Web}
+
+# LAW: a batch with no reply is accepted: 202, no body
+# MCP-HTTP-9
+law web_many_none:
+  for replies: List<&2, Maybe<&2, Value.Json>>
+  for e: {Server.batch.some(replies) == [] : List<&2, Value.Json>}
+  {Web.many(Server.batch.reply(replies)) == Web.Now{202, [], ""} : Web.Web}
+
+# LAW: else 200 with the array of the replies as one JSON body
+# MCP-HTTP-9
+law web_many_some:
+  for batch: Value.Json
+  {Web.many(Some{batch})
+    == Web.Now{200, [Http.H{"Content-Type", "application/json"}],
+      Json.print(batch)} : Web.Web}
 
 # --- stdio (MCP-STDIO) ---
 
@@ -978,21 +1295,28 @@ law utf8_bad_cont:
   for c: {Line.cont(b) == False{} : Bool}
   {Line.decode.step(a <> b <> t, go) == SCon{Line.bad(), go(b <> t)} : String}
 
-# LAW: a blank line is no message: nothing is written
+# LAW: a blank line is no message: nothing is written, and the revision is
+# unchanged
 # MCP-STDIO-3
+# MCP-LIFE-5
 law line_blank:
   for srv: Server.Server
+  for rev: String
   for text: String
   for e: {String.is_empty(String.trim(text)) == True{} : Bool}
-  {Line.line.text(srv, text) == Server.Quiet{} : Server.Act}
+  {Line.line.text(srv, rev, text) == Server.Turn{Server.Quiet{}, rev}
+    : Server.Turn}
 
-# LAW: any other line is the server's step on its text
+# LAW: any other line is the server's turn on its text
 # MCP-STDIO-3
+# MCP-LIFE-5
 law line_message:
   for srv: Server.Server
+  for rev: String
   for text: String
   for e: {String.is_empty(String.trim(text)) == False{} : Bool}
-  {Line.line.text(srv, text) == Server.step(srv, text) : Server.Act}
+  {Line.line.text(srv, rev, text) == Server.turn(srv, rev, text)
+    : Server.Turn}
 
 # LAW: a message on stdout is its JSON text and one newline
 # MCP-STDIO-4

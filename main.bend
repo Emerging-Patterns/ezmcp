@@ -1,4 +1,5 @@
-# ezmcp: Model Context Protocol (revision 2025-06-18) servers and clients for Bend 2
+# ezmcp: Model Context Protocol servers and clients for Bend 2, revisions
+# 2025-03-26, 2025-06-18 and 2025-11-25
 #
 # A server is a name, a version, instructions and a tool table; a runner
 # (String -> Json -> IO(Json)) runs a tool by name on its arguments and
@@ -33,19 +34,37 @@ def server(
 ) -> Server.Server:
   Server.Server{name, version, instructions, tools}
 
-# the protocol revision ezmcp speaks
+# the latest protocol revision ezmcp speaks
 def latest() -> String:
   Server.latest()
 
-# what a server does with one message's text: Quiet (send nothing), Send or
-# Fault (send this reply; a Fault is a message it could not accept), or Run
-# (run a tool, then send `ran` of its result). For a transport of your own
-def step(srv: Server.Server, text: String) -> Server.Act:
-  Server.step(srv, text)
+# the protocol revisions ezmcp speaks, oldest first
+def revisions() -> List<&2, String>:
+  Server.revisions()
 
-# the reply to a tool call with this id, once the tool ran
-def ran(id: Value.Json, result: Value.Json) -> Value.Json:
-  Server.ran(id, result)
+# what a server does with one message's text, read by revision `rev`: Quiet
+# (send nothing), Send or Fault (send this reply; a Fault is a message it
+# could not accept), Run (run a tool, then send `ran` of its result), or,
+# under 2025-03-26, Batch (do each of its acts, then send `batch.reply` of
+# their replies). For a transport of your own
+def step(srv: Server.Server, rev: String, text: String) -> Server.Act:
+  Server.step(srv, rev, text)
+
+# `step`'s act, and the revision a stream's next message is read by: the one
+# an initialize was answered with, else `rev`. For a stream transport of your
+# own, which starts at `latest()`
+def turn(srv: Server.Server, rev: String, text: String) -> Server.Turn:
+  Server.turn(srv, rev, text)
+
+# the reply to a tool call with this id, once the tool ran, under revision
+# `rev` (2025-03-26 leaves structuredContent out)
+def ran(rev: String, id: Value.Json, result: Value.Json) -> Value.Json:
+  Server.ran(rev, id, result)
+
+# what a batch sends back, from its acts' replies in order (None for an act
+# with none): nothing when none has one, else their array
+def batch.reply(replies: List<&2, Maybe<&2, Value.Json>>) -> Maybe<&2, Value.Json>:
+  Server.batch.reply(replies)
 
 # --- tool results ---
 
@@ -66,7 +85,8 @@ def result.text(text: String) -> Value.Json:
 def result.error(text: String) -> Value.Json:
   Server.result([Server.text(text)], True{})
 
-# a tool result with structured content, and its JSON text as a text block
+# a tool result with structured content, and its JSON text as a text block;
+# a 2025-03-26 client gets the text block alone
 def result.json(val: Value.Json) -> Value.Json:
   Server.structured(val, False{})
 

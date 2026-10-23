@@ -195,20 +195,26 @@ def decode(+bs: List<&2, U32>) -> String:
 
 # --- messages ---
 
-def line.of(srv: Server.Server, +text: String, blank: Bool) -> Server.Act:
+def line.of(
+  srv: Server.Server,
+  +rev: String,
+  +text: String,
+  blank: Bool
+) -> Server.Turn:
   match blank:
     case True{}:
-      Server.Quiet{}
+      Server.Turn{Server.Quiet{}, rev}
     case False{}:
-      Server.step(srv, text)
+      Server.turn(srv, rev, text)
 
-def line.text(srv: Server.Server, +text: String) -> Server.Act:
-  line.of(srv, text, String.is_empty(String.trim(text)))
+def line.text(srv: Server.Server, +rev: String, +text: String) -> Server.Turn:
+  line.of(srv, rev, text, String.is_empty(String.trim(text)))
 
-# what a server does with one line: nothing for a blank one, else the
-# server's step on its text
-def line(srv: Server.Server, bs: List<&2, U32>) -> Server.Act:
-  line.text(srv, decode(bs))
+# what a server does with one line read by revision `rev`, and the revision
+# the next line is read by: nothing for a blank one, and the revision
+# unchanged; else the server's turn on its text
+def line(srv: Server.Server, rev: String, bs: List<&2, U32>) -> Server.Turn:
+  line.text(srv, rev, decode(bs))
 
 # one message on stdout: its JSON text and a newline
 def frame(val: Value.Json) -> String:

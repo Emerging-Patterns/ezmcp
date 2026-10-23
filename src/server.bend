@@ -1,6 +1,8 @@
 # ezmcp/src/server: an MCP server's decisions, with no IO. One message's
-# text in, an act out: a reply to send, nothing to send, or a tool call for
-# the transport to run (src/io.bend) before it replies with `ran`.
+# text in, under the protocol revision the transport reads it by, an act
+# out: a reply to send, nothing to send, a tool call for the transport to
+# run (src/io.bend) before it replies with `ran`, or, under 2025-03-26, a
+# batch of those.
 import Base
 import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
@@ -16,12 +18,19 @@ type Server is Data:
   Server{name: String, version: String, instructions: String,
     tools: List<&2, Tool>}
 
-# what a server does with one message
+# what a server does with one message; a Batch's acts are its elements',
+# in order, and none of them is a Batch
 type Act is Data:
   Quiet{}
   Send{reply: Value.Json}
   Fault{reply: Value.Json}
   Run{id: Value.Json, name: String, args: Value.Json}
+  Batch{acts: List<&2, Act>}
+
+# what a server does with one message, and the revision the messages after
+# it are read by on the same stream
+type Turn is Data:
+  Turn{act: Act, rev: String}
 
 # how a method ends: an outcome now, or a tool to run
 type Step is Data:
@@ -38,13 +47,28 @@ type Method is Data:
 
 # --- protocol versions ---
 
-# the revision ezmcp speaks
+# the latest revision ezmcp speaks
 def latest() -> String:
-  "2025-06-18"
+  "2025-11-25"
+
+# the oldest: the one JSON-RPC batches belong to, and the one a server
+# assumes for an HTTP request that names none
+def oldest() -> String:
+  "2025-03-26"
+
+# the revisions ezmcp speaks, oldest first
+def revisions() -> List<&2, String>:
+  [oldest(), "2025-06-18", latest()]
 
 # whether ezmcp speaks a revision
-def supported(val: String) -> Bool:
-  String.eq(val, latest())
+def supported(+val: String) -> Bool:
+  Bool.or(String.eq(val, oldest()),
+    Bool.or(String.eq(val, "2025-06-18"), String.eq(val, latest())))
+
+# whether a revision receives JSON-RPC batches: 2025-03-26 does, and
+# 2025-06-18 removed them
+def batches(rev: String) -> Bool:
+  String.eq(rev, oldest())
 
 # the revision a server answers to the one a client asks for: the same when
 # it is supported, else the latest (basic/lifecycle#version-negotiation)
@@ -62,6 +86,28 @@ def negotiate(asked: Maybe<&2, String>) -> String:
       latest()
     case Some{+v}:
       negotiate.of(v, supported(v))
+
+# --- the revision of a stream ---
+
+def session.ask(rev: String, params: Value.Json, init: Bool) -> String:
+  match init:
+    case True{}:
+      negotiate(Json.as_str(Json.get(params, "protocolVersion")))
+    case False{}:
+      rev
+
+# the revision the messages after this one are read by: the one the server
+# answers an initialize request with, else the one they were read by
+def session(rev: String, msg: Rpc.Msg) -> String:
+  match msg:
+    case Rpc.Ask{id, +m, params}:
+      session.ask(rev, params, String.eq(m, "initialize"))
+    case Rpc.Tell{m, params}:
+      rev
+    case Rpc.Answer{id}:
+      rev
+    case Rpc.Junk{id, why}:
+      rev
 
 # --- initialize ---
 
@@ -241,21 +287,161 @@ def unparsed() -> Act:
   Fault{Rpc.reply(Json.null(),
     Rpc.Err{Rpc.ParseError{}, "Parse error"})}
 
-# what a server does with a decoded message, or with text that was not JSON
-def parsed(srv: Server, meth: Maybe<&2, Value.Json>) -> Act:
+# --- batches (2025-03-26) ---
+
+def batch.init(id: Value.Json, msg: Rpc.Msg, init: Bool, srv: Server) -> Act:
+  match init:
+    case True{}:
+      Send{Rpc.reply(id, Rpc.Err{Rpc.InvalidRequest{},
+        "Invalid Request: initialize must not be part of a batch"})}
+    case False{}:
+      handle(srv, msg)
+
+# what a server does with one element of a batch: what it does with the
+# message alone, except that initialize is an invalid request
+# (2025-03-26/basic/lifecycle#initialization)
+def batch.one(srv: Server, +msg: Rpc.Msg) -> Act:
+  match msg:
+    case Rpc.Ask{+id, +m, params}:
+      batch.init(id, msg, String.eq(m, "initialize"), srv)
+    case other:
+      handle(srv, other)
+
+# every element's act, in order
+def batch.all(+srv: Server, items: List<&2, Value.Json>) -> List<&2, Act>:
+  match items:
+    case []:
+      []
+    case i <> rest:
+      batch.one(srv, Rpc.classify(i)) <> batch.all(srv, rest)
+
+# what a server does with a batch: an empty one is one invalid request
+# (JSON-RPC §6); any other is a batch of its elements' acts
+def batch(srv: Server, items: List<&2, Value.Json>) -> Act:
+  match items:
+    case []:
+      Fault{Rpc.reply(Json.null(), Rpc.Err{Rpc.InvalidRequest{},
+        "Invalid Request: empty batch"})}
+    case i <> rest:
+      Batch{batch.all(srv, i <> rest)}
+
+# the replies of a batch's elements that have one, in order
+def batch.some(replies: List<&2, Maybe<&2, Value.Json>>) -> List<&2, Value.Json>:
+  match replies:
+    case []:
+      []
+    case None{} <> rest:
+      batch.some(rest)
+    case Some{r} <> rest:
+      r <> batch.some(rest)
+
+def batch.gather(replies: List<&2, Value.Json>) -> Maybe<&2, Value.Json>:
+  match replies:
+    case []:
+      None{}
+    case r <> rest:
+      Some{Json.arr(r <> rest)}
+
+# what a batch sends back: nothing when no element has a reply, else the
+# array of the replies (JSON-RPC §6)
+def batch.reply(replies: List<&2, Maybe<&2, Value.Json>>) -> Maybe<&2, Value.Json>:
+  batch.gather(batch.some(replies))
+
+# --- a message's turn ---
+
+# a message's act, and the revision after it
+def turn.msg(srv: Server, rev: String, +msg: Rpc.Msg) -> Turn:
+  Turn{handle(srv, msg), session(rev, msg)}
+
+# a decoded value: a batch when it is an array and the revision receives
+# batches, else one message
+def turn.value(srv: Server, rev: String, +val: Value.Json, many: Bool) -> Turn:
+  match many:
+    case True{}:
+      Turn{batch(srv, Json.items(val)), rev}
+    case False{}:
+      turn.msg(srv, rev, Rpc.classify(val))
+
+# a decoded message, or text that was not JSON
+def turn.parsed(srv: Server, +rev: String, meth: Maybe<&2, Value.Json>) -> Turn:
   match meth:
     case None{}:
-      unparsed()
-    case Some{v}:
-      handle(srv, Rpc.classify(v))
+      Turn{unparsed(), rev}
+    case Some{+v}:
+      turn.value(srv, rev, v, Bool.and(Json.is_arr(v), batches(rev)))
 
-# what a server does with one message's text
-def step(srv: Server, text: String) -> Act:
-  parsed(srv, Json.parse(text))
+# what a server does with one message's text, read by revision `rev`, and
+# the revision the stream's next message is read by
+def turn(srv: Server, rev: String, text: String) -> Turn:
+  turn.parsed(srv, rev, Json.parse(text))
 
-# the reply to a tool call, once it ran
-def ran(id: Value.Json, result: Value.Json) -> Value.Json:
-  Rpc.reply(id, Rpc.Ok{result})
+# a turn's act
+def turn.act(tn: Turn) -> Act:
+  match tn:
+    case Turn{act, rev}:
+      act
+
+# what a server does with one message's text, read by revision `rev`
+def step(srv: Server, rev: String, text: String) -> Act:
+  turn.act(turn(srv, rev, text))
+
+# --- the reply to a tool call ---
+
+def without.pair(hit: Bool, key: String, val: Value.Json, rest: Value.Json) -> Value.Json:
+  match hit:
+    case True{}:
+      rest
+    case False{}:
+      Value.JPair{key, val, rest}
+
+def without.bind(
+  hit: Bool,
+  src: String,
+  num: U32,
+  val: Value.Json,
+  rest: Value.Json
+) -> Value.Json:
+  match hit:
+    case True{}:
+      rest
+    case False{}:
+      Value.JBind{src, num, val, rest}
+
+# an object's members, less every one named `key`
+def without.go(cells: Value.Json, +key: String) -> Value.Json:
+  match cells:
+    case Value.JPair{+k, v, r}:
+      without.pair(Value.find.eq(k, key), k, v, without.go(r, key))
+    case Value.JBind{+src, +num, v, r}:
+      without.bind(Value.span.eq(src, num, key), src, num, v,
+        without.go(r, key))
+    case other:
+      other
+
+# an object less every member named `key`; any other value as it is
+def without(val: Value.Json, key: String) -> Value.Json:
+  match val:
+    case Value.JObj{pairs}:
+      Value.JObj{without.go(pairs, key)}
+    case other:
+      other
+
+def shape.of(result: Value.Json, old: Bool) -> Value.Json:
+  match old:
+    case True{}:
+      without(result, "structuredContent")
+    case False{}:
+      result
+
+# a tool's result as revision `rev` reads it: 2025-03-26 has no
+# structuredContent (2025-06-18/server/tools#structured-content), so it is
+# left out; any later revision gets the result as the runner answered it
+def shape(rev: String, result: Value.Json) -> Value.Json:
+  shape.of(result, String.eq(rev, oldest()))
+
+# the reply to a tool call, once it ran, under revision `rev`
+def ran(rev: String, id: Value.Json, result: Value.Json) -> Value.Json:
+  Rpc.reply(id, Rpc.Ok{shape(rev, result)})
 
 # --- tool results (server/tools#tool-result) ---
 

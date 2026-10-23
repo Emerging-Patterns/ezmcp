@@ -37,14 +37,29 @@ law server_is_server:
 # LAW: step is src/server.bend's
 law step_is_server:
   for srv: Server.Server
+  for rev: String
   for text: String
-  {Ez.step(srv, text) == Server.step(srv, text) : Server.Act}
+  {Ez.step(srv, rev, text) == Server.step(srv, rev, text) : Server.Act}
+
+# LAW: turn is src/server.bend's
+law turn_is_server:
+  for srv: Server.Server
+  for rev: String
+  for text: String
+  {Ez.turn(srv, rev, text) == Server.turn(srv, rev, text) : Server.Turn}
 
 # LAW: ran is src/server.bend's
 law ran_is_server:
+  for rev: String
   for id: Value.Json
   for result: Value.Json
-  {Ez.ran(id, result) == Server.ran(id, result) : Value.Json}
+  {Ez.ran(rev, id, result) == Server.ran(rev, id, result) : Value.Json}
+
+# LAW: batch.reply is src/server.bend's
+law batch_reply_is_server:
+  for replies: List<&2, Maybe<&2, Value.Json>>
+  {Ez.batch.reply(replies) == Server.batch.reply(replies)
+    : Maybe<&2, Value.Json>}
 
 # LAW: text is a text block
 law text_is_server:
@@ -122,11 +137,19 @@ def server_is_server(_name, _version, _instructions, _tools):
   {==}
 
 # step_is_server holds by unfolding the re-export
-def step_is_server(_srv, _text):
+def step_is_server(_srv, _rev, _text):
+  {==}
+
+# turn_is_server holds by unfolding the re-export
+def turn_is_server(_srv, _rev, _text):
   {==}
 
 # ran_is_server holds by unfolding the re-export
-def ran_is_server(_id, _result):
+def ran_is_server(_rev, _id, _result):
+  {==}
+
+# batch_reply_is_server holds by unfolding the re-export
+def batch_reply_is_server(_replies):
   {==}
 
 # text_is_server holds by unfolding the re-export

@@ -1,7 +1,8 @@
 # examples/conformance: the tools the MCP conformance suite's server
 # scenarios call (npx @modelcontextprotocol/conformance server), for the ones
 # ezmcp has the features for: text, image, audio and embedded resource
-# content, several blocks, and a tool error.
+# content, several blocks, a tool error, and a JSON Schema 2020-12 input
+# schema.
 #
 #   conformance PORT    POST /mcp on 127.0.0.1:PORT until stopped
 import Base
@@ -9,6 +10,21 @@ import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
 import ../../main.bend as Mcp
 import ../../src/server.bend as Server
+
+# the JSON Schema 2020-12 keywords the json-schema-2020-12 scenario looks
+# for in tools/list, passed through as given
+def schema2020() -> Value.Json:
+  Json.obj([
+    ("$schema", Json.str("https://json-schema.org/draft/2020-12/schema")),
+    ("type", Json.str("object")),
+    ("$defs", Json.obj([("address", Json.obj([("type", Json.str("object")),
+      ("properties", Json.obj([
+        ("street", Json.obj([("type", Json.str("string"))])),
+        ("city", Json.obj([("type", Json.str("string"))]))]))]))])),
+    ("properties", Json.obj([
+      ("name", Json.obj([("type", Json.str("string"))])),
+      ("address", Json.obj([("$ref", Json.str("#/$defs/address"))]))])),
+    ("additionalProperties", Json.bool(False{}))])
 
 # a schema for a tool with no arguments
 def none() -> Value.Json:
@@ -22,7 +38,9 @@ def srv() -> Server.Server:
     Mcp.tool("test_audio_content", "Audio content", none()),
     Mcp.tool("test_embedded_resource", "Embedded resource content", none()),
     Mcp.tool("test_multiple_content_types", "Several content blocks", none()),
-    Mcp.tool("test_error_handling", "A tool error", none())])
+    Mcp.tool("test_error_handling", "A tool error", none()),
+    Mcp.tool("json_schema_2020_12_tool", "Tool with JSON Schema 2020-12 features",
+      schema2020())])
 
 # a 1x1 red PNG
 def png() -> String:
