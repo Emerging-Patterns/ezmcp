@@ -4,13 +4,16 @@
 #   demo http PORT [N]  POST /mcp on 127.0.0.1:PORT, for N connections
 #                       (forever when N is absent)
 #
-# echo answers its text back; add answers the sum of two integers as
-# structured content, or a tool error when they are not integers.
+# echo answers its text back, and refuses a text that is not a string with
+# -32602 (a protocol error: the call does not match the schema); add answers
+# the sum of two integers as structured content, or a tool error when they
+# are not integers, which the model can correct.
 import Base
 import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
 import ../../main.bend as Mcp
 import ../../src/server.bend as Server
+import ../../src/rpc.bend as Rpc
 
 def schema.echo() -> Value.Json:
   Json.obj([("type", Json.str("object")),
@@ -30,13 +33,13 @@ def srv() -> Server.Server:
     Mcp.tool("echo", "Answer the text back", schema.echo()),
     Mcp.tool("add", "Add two integers", schema.add())])
 
-# echo's result: the text, or a tool error
-def echo(meth: Maybe<&2, String>) -> Value.Json:
+# echo's answer: the text, or a refusal
+def echo(meth: Maybe<&2, String>) -> Rpc.Out:
   match meth:
     case None{}:
-      Mcp.result.error("echo: text must be a string")
+      Mcp.refuse.params("echo: text must be a string")
     case Some{s}:
-      Mcp.result.text(s)
+      Mcp.ok(Mcp.result.text(s))
 
 # add's result: the sum as structured content, or a tool error
 def add(lead: Maybe<&2, U32>, byte: Maybe<&2, U32>) -> Value.Json:
@@ -46,16 +49,16 @@ def add(lead: Maybe<&2, U32>, byte: Maybe<&2, U32>) -> Value.Json:
     case x y:
       Mcp.result.error("add: a and b must be non-negative integers")
 
-def run.of(+args: Value.Json, is_echo: Bool) -> IO(Value.Json):
+def run.of(+args: Value.Json, is_echo: Bool) -> IO(Rpc.Out):
   match is_echo:
     case True{}:
-      IO.pure(Value.Json, echo(Json.as_str(Json.get(args, "text"))))
+      IO.pure(Rpc.Out, echo(Json.as_str(Json.get(args, "text"))))
     case False{}:
-      IO.pure(Value.Json, add(Json.as_u32(Json.get(args, "a")),
-        Json.as_u32(Json.get(args, "b"))))
+      IO.pure(Rpc.Out, Mcp.ok(add(Json.as_u32(Json.get(args, "a")),
+        Json.as_u32(Json.get(args, "b")))))
 
 # ezmcp only runs tools the table names, so a name is echo or add
-def run(name: String, args: Value.Json) -> IO(Value.Json):
+def run(name: String, args: Value.Json) -> IO(Rpc.Out):
   run.of(args, String.eq(name, "echo"))
 
 def http.limit(meth: Maybe<&1, String>) -> Maybe<&2, U32>:

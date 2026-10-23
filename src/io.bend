@@ -19,7 +19,7 @@ import ./client.bend as Client
 # one element of a batch, under revision `rev`: its reply, after running its
 # tool when it is a tool call; none for a notification or a response
 def act.reply(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   +rev: String,
   act: Server.Act
 ) -> IO(Maybe<&2, Value.Json>):
@@ -31,15 +31,14 @@ def act.reply(
     case Server.Fault{reply}:
       IO.pure(Maybe<&2, Value.Json>, Some{reply})
     case Server.Run{id, name, args}:
-      IO.bind(Value.Json, Maybe<&2, Value.Json>, run(name, args),
-        result => IO.pure(Maybe<&2, Value.Json>,
-          Some{Server.ran(rev, id, result)}))
+      IO.bind(Rpc.Out, Maybe<&2, Value.Json>, run(name, args),
+        out => IO.pure(Maybe<&2, Value.Json>, Some{Server.ran(rev, id, out)}))
     case Server.Batch{acts}:
       IO.pure(Maybe<&2, Value.Json>, None{})
 
 # every element of a batch, in order
 def act.all(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   +rev: String,
   acts: List<&2, Server.Act>
 ) -> IO(List<&2, Maybe<&2, Value.Json>>):
@@ -58,15 +57,15 @@ def act.all(
 # act on the transport's decision: reply now, or run the tool and reply
 # with its result, or run a batch's acts and reply with their replies
 def http.web(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   wid: Web.Web
 ) -> IO(Http.Reply):
   match wid:
     case Web.Now{status, headers, body}:
       IO.pure(Http.Reply, Http.Reply{status, headers, body})
     case Web.Later{rev, id, name, args}:
-      IO.bind(Value.Json, Http.Reply, run(name, args),
-        result => IO.pure(Http.Reply, Web.reply(Web.ran(rev, id, result))))
+      IO.bind(Rpc.Out, Http.Reply, run(name, args),
+        out => IO.pure(Http.Reply, Web.reply(Web.ran(rev, id, out))))
     case Web.Many{+rev, acts}:
       IO.bind(List<&2, Maybe<&2, Value.Json>>, Http.Reply,
         act.all(run, rev, acts),
@@ -74,7 +73,7 @@ def http.web(
 
 # one HTTP request to a server's endpoint at `path`
 def http.handle(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
   ~path: String,
   ~origins: List<&2, String>,
@@ -84,7 +83,7 @@ def http.handle(
 
 # serve `limit` connections, then stop
 def http.serve(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
   ~path: String,
   ~origins: List<&2, String>,
@@ -97,7 +96,7 @@ def http.serve(
 
 # serve until the process is stopped
 @unsafe def http.serve_forever(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
   ~path: String,
   ~origins: List<&2, String>,
@@ -131,7 +130,7 @@ def stdio.batch(replies: Maybe<&2, Value.Json>) -> IO(Unit):
 # or run the tool and write its reply, or run a batch's acts and write the
 # array of their replies, or write nothing
 def stdio.act(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   +rev: String,
   act: Server.Act
 ) -> IO(Unit):
@@ -143,15 +142,15 @@ def stdio.act(
     case Server.Fault{reply}:
       IO.write(Line.frame(reply))
     case Server.Run{id, name, args}:
-      IO.bind(Value.Json, Unit, run(name, args),
-        result => IO.write(Line.frame(Server.ran(rev, id, result))))
+      IO.bind(Rpc.Out, Unit, run(name, args),
+        out => IO.write(Line.frame(Server.ran(rev, id, out))))
     case Server.Batch{acts}:
       IO.bind(List<&2, Maybe<&2, Value.Json>>, Unit, act.all(run, rev, acts),
         rs => stdio.batch(Server.batch.reply(rs)))
 
 # act on a turn read by revision `rev`, then go on with the revision after it
 def stdio.turn(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   +rev: String,
   turn: Server.Turn,
   next: String -> IO(String)
@@ -163,7 +162,7 @@ def stdio.turn(
 # every whole line, in order, each read by the revision the line before it
 # left; answers the revision the last one left
 def stdio.lines(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
   lines: List<&2, List<&2, U32>>,
   +rev: String
@@ -177,7 +176,7 @@ def stdio.lines(
 
 # act on a cut's whole lines, then read on with its rest
 def stdio.cut(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
   rev: String,
   again: List<&2, U32> -> String -> IO(Unit),
@@ -191,7 +190,7 @@ def stdio.cut(
 # after a read: an empty one is the end of stdin, and the bytes after the
 # last newline are the last message; any other is cut into lines
 def stdio.chunked(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
   rev: String,
   buf: List<&2, U32>,
@@ -209,7 +208,7 @@ def stdio.chunked(
 
 # after one read: a failure is logged to stderr and ends the loop
 def stdio.got(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
   rev: String,
   buf: List<&2, U32>,
@@ -226,7 +225,7 @@ def stdio.got(
 # read, act on every whole line, and read again until stdin ends; `rev` is
 # the revision the next line is read by
 @unsafe def stdio.loop(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
   buf: List<&2, U32>,
   rev: String
@@ -239,7 +238,7 @@ def stdio.got(
 # serve newline-delimited JSON-RPC on stdin and stdout until stdin ends; a
 # line is read by the latest revision until an initialize names another
 @unsafe def stdio.serve(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server
 ) -> IO(Unit):
   stdio.loop(run, srv, [], Server.latest())

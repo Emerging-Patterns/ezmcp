@@ -224,13 +224,15 @@ law answer_id:
   for s: Server.Step
   {sent.id(Server.answer(id, s)) == id : Value.Json}
 
-# LAW: a tool's reply carries the call's id
+# LAW: a tool's reply carries the call's id, whether the runner answered a
+# result or refused
 # MCP-RPC-5
+# MCP-TOOL-8
 law ran_id:
   for rev: String
   for id: Value.Json
-  for result: Value.Json
-  {Json.get(Server.ran(rev, id, result), "id") == id : Value.Json}
+  for out: Rpc.Out
+  {Json.get(Server.ran(rev, id, out), "id") == id : Value.Json}
 
 # LAW: a successful reply has a result and no error
 # MCP-RPC-6
@@ -883,7 +885,8 @@ law ran_result:
   for id: Value.Json
   for result: Value.Json
   for e: {String.eq(rev, "2025-03-26") == False{} : Bool}
-  {Json.get(Server.ran(rev, id, result), "result") == result : Value.Json}
+  {Json.get(Server.ran(rev, id, Rpc.Ok{result}), "result") == result
+    : Value.Json}
 
 # LAW: structured content is the value itself
 # MCP-TOOL-6
@@ -900,12 +903,23 @@ law structured_text:
   {Json.items(Json.get(Server.structured(v, bad), "content"))
     == [Server.text(Json.print(v))] : List<&2, Value.Json>}
 
+# LAW: a runner that refuses a call is answered with its error, under any
+# revision
+# MCP-TOOL-8
+law ran_refused:
+  for rev: String
+  for id: Value.Json
+  for c: Rpc.Code
+  for message: String
+  {Server.ran(rev, id, Rpc.Err{c, message}) == Rpc.reply(id, Rpc.Err{c, message})
+    : Value.Json}
+
 # LAW: under 2025-03-26 the reply to a tool call has no structuredContent
 # MCP-TOOL-7
 law ran_unstructured:
   for id: Value.Json
   for result: Value.Json
-  {Json.has(Json.get(Server.ran("2025-03-26", id, result), "result"),
+  {Json.has(Json.get(Server.ran("2025-03-26", id, Rpc.Ok{result}), "result"),
     "structuredContent") == False{} : Bool}
 
 # LAW: and its result is the runner's, less structuredContent
@@ -913,7 +927,7 @@ law ran_unstructured:
 law ran_old_result:
   for id: Value.Json
   for result: Value.Json
-  {Json.get(Server.ran("2025-03-26", id, result), "result")
+  {Json.get(Server.ran("2025-03-26", id, Rpc.Ok{result}), "result")
     == Server.without(result, "structuredContent") : Value.Json}
 
 # LAW: leaving a member out keeps every member with another key, in order
@@ -997,10 +1011,10 @@ law web_send:
 law web_ran:
   for rev: String
   for id: Value.Json
-  for result: Value.Json
-  {Web.ran(rev, id, result)
+  for out: Rpc.Out
+  {Web.ran(rev, id, out)
     == Web.Now{200, [Http.H{"Content-Type", "application/json"}],
-      Json.print(Server.ran(rev, id, result))} : Web.Web}
+      Json.print(Server.ran(rev, id, out))} : Web.Web}
 
 # LAW: a tool call is run, under the request's revision, before the reply
 # MCP-HTTP-1

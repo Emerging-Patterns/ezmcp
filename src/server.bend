@@ -439,9 +439,15 @@ def shape.of(result: Value.Json, old: Bool) -> Value.Json:
 def shape(rev: String, result: Value.Json) -> Value.Json:
   shape.of(result, String.eq(rev, oldest()))
 
-# the reply to a tool call, once it ran, under revision `rev`
-def ran(rev: String, id: Value.Json, result: Value.Json) -> Value.Json:
-  Rpc.reply(id, Rpc.Ok{shape(rev, result)})
+# the reply to a tool call under revision `rev`, once the runner answered:
+# its tool result, shaped for the revision, or the protocol error it chose
+# (server/tools#error-handling)
+def ran(rev: String, id: Value.Json, out: Rpc.Out) -> Value.Json:
+  match out:
+    case Rpc.Ok{result}:
+      Rpc.reply(id, Rpc.Ok{shape(rev, result)})
+    case Rpc.Err{c, message}:
+      Rpc.reply(id, Rpc.Err{c, message})
 
 # --- tool results (server/tools#tool-result) ---
 

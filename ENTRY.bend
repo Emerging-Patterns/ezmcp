@@ -52,8 +52,30 @@ law turn_is_server:
 law ran_is_server:
   for rev: String
   for id: Value.Json
+  for out: Rpc.Out
+  {Ez.ran(rev, id, out) == Server.ran(rev, id, out) : Value.Json}
+
+# LAW: ok is a tool result
+law ok_is_result:
   for result: Value.Json
-  {Ez.ran(rev, id, result) == Server.ran(rev, id, result) : Value.Json}
+  {Ez.ok(result) == Rpc.Ok{result} : Rpc.Out}
+
+# LAW: refuse is a JSON-RPC error with its code and message
+law refuse_is_error:
+  for c: Rpc.Code
+  for message: String
+  {Ez.refuse(c, message) == Rpc.Err{c, message} : Rpc.Out}
+
+# LAW: refuse.params is -32602
+law refuse_params_invalid:
+  for message: String
+  {Ez.refuse.params(message) == Rpc.Err{Rpc.InvalidParams{}, message} : Rpc.Out}
+
+# LAW: refuse.internal is -32603
+law refuse_internal_error:
+  for message: String
+  {Ez.refuse.internal(message) == Rpc.Err{Rpc.InternalError{}, message}
+    : Rpc.Out}
 
 # LAW: batch.reply is src/server.bend's
 law batch_reply_is_server:
@@ -145,7 +167,23 @@ def turn_is_server(_srv, _rev, _text):
   {==}
 
 # ran_is_server holds by unfolding the re-export
-def ran_is_server(_rev, _id, _result):
+def ran_is_server(_rev, _id, _out):
+  {==}
+
+# ok_is_result holds by unfolding the re-export
+def ok_is_result(_result):
+  {==}
+
+# refuse_is_error holds by unfolding the re-export
+def refuse_is_error(_c, _message):
+  {==}
+
+# refuse_params_invalid holds by unfolding the re-export
+def refuse_params_invalid(_message):
+  {==}
+
+# refuse_internal_error holds by unfolding the re-export
+def refuse_internal_error(_message):
   {==}
 
 # batch_reply_is_server holds by unfolding the re-export

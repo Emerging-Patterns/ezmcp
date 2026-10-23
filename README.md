@@ -44,16 +44,23 @@ releases equal.
 ## A server
 
 A server is a name, a version, instructions for the client and a tool
-table. A runner, `String -> Json -> IO(Json)`, runs a tool by name on its
-arguments and answers a tool result. ezmcp answers `initialize`, `ping` and
-`tools/list` itself, refuses an unknown tool or arguments that are not an
-object, and calls the runner only for a tool the table names.
+table. A runner, `String -> Json -> IO(Rpc.Out)`, runs a tool by name on its
+arguments and answers `Mcp.ok` of a tool result, or refuses the call with a
+JSON-RPC error: `Mcp.refuse.params(message)` (-32602, for arguments that do
+not match the tool's schema), `Mcp.refuse.internal(message)` (-32603), or
+`Mcp.refuse(code, message)`. A tool that ran and failed answers
+`Mcp.ok(Mcp.result.error(...))` instead, so the model sees the failure and
+can retry; 2025-11-25 asks for input validation errors to be reported that
+way too. ezmcp answers `initialize`, `ping` and `tools/list` itself, refuses
+an unknown tool or arguments that are not an object, and calls the runner
+only for a tool the table names.
 
 ```
 import Base
 import emerging-ezjson@1.2.0.0/main.bend as Json
 import emerging-ezjson@1.2.0.0/src/value.bend as Value
 import emerging-ezmcp@0.1.0.0/main.bend as Mcp
+import emerging-ezmcp@0.1.0.0/src/rpc.bend as Rpc
 import emerging-ezmcp@0.1.0.0/src/server.bend as Server
 
 def srv() -> Server.Server:
@@ -64,15 +71,15 @@ def srv() -> Server.Server:
           Json.obj([("type", Json.str("string"))]))])),
         ("required", Json.arr([Json.str("name")]))]))])
 
-def greeting(name: Maybe<&2, String>) -> Value.Json:
+def greeting(name: Maybe<&2, String>) -> Rpc.Out:
   match name:
     case None{}:
-      Mcp.result.error("name must be a string")
+      Mcp.refuse.params("name must be a string")
     case Some{n}:
-      Mcp.result.text("Hello, " ++ n ++ "!")
+      Mcp.ok(Mcp.result.text("Hello, " ++ n ++ "!"))
 
-def run(_tool: String, args: Value.Json) -> IO(Value.Json):
-  IO.pure(Value.Json, greeting(Json.as_str(Json.get(args, "name"))))
+def run(_tool: String, args: Value.Json) -> IO(Rpc.Out):
+  IO.pure(Rpc.Out, greeting(Json.as_str(Json.get(args, "name"))))
 
 @unsafe def main() -> IO(Unit):
   Mcp.http.serve_forever(~run, ~srv(), ~"/mcp", ~[], "127.0.0.1", 8000)
@@ -86,6 +93,10 @@ endpoint in an ezhttp server that serves other paths too, hand requests to
 | Name | Type | What it does |
 | :---- | :---- | :---- |
 | `tool(name, description, input_schema)` | `Server.Tool` | a tool table entry |
+| `ok(result)` | `Rpc.Out` | a runner's answer: this tool result |
+| `refuse(code, message)` | `Rpc.Out` | a runner's answer: this JSON-RPC error, not a tool result |
+| `refuse.params(message)` | `Rpc.Out` | refuse with -32602 Invalid params |
+| `refuse.internal(message)` | `Rpc.Out` | refuse with -32603 Internal error |
 | `server(name, version, instructions, tools)` | `Server.Server` | a server; `""` for no instructions |
 | `result.text(s)` | `Json` | a tool result of one text block |
 | `result.error(s)` | `Json` | a failed tool's result: one text block, `isError` true |
@@ -99,7 +110,7 @@ endpoint in an ezhttp server that serves other paths too, hand requests to
 | `stdio.serve(~run, ~srv)` | `IO(Unit)` | serve stdin and stdout until stdin ends (`@unsafe`) |
 | `step(srv, rev, text)` | `Server.Act` | what a server does with one message read by revision `rev`, for a transport of your own |
 | `turn(srv, rev, text)` | `Server.Turn` | `step`'s act and the revision a stream's next message is read by |
-| `ran(rev, id, result)` | `Json` | the reply to a tool call once it ran |
+| `ran(rev, id, out)` | `Json` | the reply to a tool call once the runner answered |
 | `batch.reply(replies)` | `Maybe<Json>` | what a 2025-03-26 batch sends back, from its acts' replies |
 | `latest()` | `String` | `"2025-11-25"` |
 | `revisions()` | `List<String>` | the revisions ezmcp speaks, oldest first |
