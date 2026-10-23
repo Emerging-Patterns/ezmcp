@@ -5,11 +5,10 @@
 import Base
 import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
-import 0xa4d47e5f0f6044ac1a983d1b051fa47a/main.bend as Ez
-import 0xa4d47e5f0f6044ac1a983d1b051fa47a/src/http.bend as Http
-import 0xa4d47e5f0f6044ac1a983d1b051fa47a/src/client.bend as EzClient
-import 0xa4d47e5f0f6044ac1a983d1b051fa47a/src/server.bend as EzServer
-import 0xa4d47e5f0f6044ac1a983d1b051fa47a/src/step.bend as EzStep
+import 0xedb2120a04a47dc18c3a756ec7c62750/main.bend as Ez
+import 0xedb2120a04a47dc18c3a756ec7c62750/src/http.bend as Http
+import 0xedb2120a04a47dc18c3a756ec7c62750/src/client.bend as EzClient
+import 0xedb2120a04a47dc18c3a756ec7c62750/src/server.bend as EzServer
 import ./rpc.bend as Rpc
 import ./server.bend as Server
 import ./web.bend as Web
@@ -91,129 +90,29 @@ def http.handle_with(
 ) -> IO(Http.Reply):
   http.web(C, run, ctx, Web.decide(srv, path, origins, req))
 
-# --- serving HTTP with a context ---
+# --- serving HTTP ---
 #
-# ezhttp's serve loops take a closed handler, which cannot carry a value
-# read at run time, so the loops below are ezhttp's serve_io and
-# serve_forever (its src/server.bend) with the context passed along; every
-# read, write and step of a connection is still ezhttp's (MCP-TRUST-2)
+# ezhttp serves each connection on its own fork, reads and parses the
+# request, answers one it answers itself (a request that does not parse),
+# and calls the handler with the context for the rest (MCP-TRUST-2); the
+# handler below is the endpoint's
 
-# answer one request ezhttp read: its own reply, or the endpoint's
-def http.step(
+# the endpoint's answer to one request ezhttp read, as its plain serves
+# take one: the request as text in, a text reply out
+def http.answer(
   ~C: Data,
   ~run: C -> String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
   ~path: String,
   ~origins: List<&2, String>,
   +ctx: C,
-  sock: Socket,
-  +method: String,
-  step: EzStep.Step
-) -> IO(Unit):
-  match step:
-    case EzStep.Answer{reply}:
-      EzServer.server.answer(sock, method, reply)
-    case EzStep.Call{req}:
-      IO.bind(Http.Reply, Unit, http.handle_with(C, run, srv, path, origins, ctx, req),
-        reply => EzServer.server.answer(sock, method, reply))
+  req: EzServer.Req
+) -> IO(EzServer.Answer):
+  IO.bind(Http.Reply, EzServer.Answer,
+    http.handle_with(C, run, srv, path, origins, ctx, EzServer.server.plain(req)),
+    EzServer.server.text)
 
-# one connection's request, once read
-def http.exchange.got(
-  ~C: Data,
-  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
-  ~srv: Server.Server,
-  ~path: String,
-  ~origins: List<&2, String>,
-  +ctx: C,
-  sock: Socket,
-  got: EzStep.Got<Http.Request>
-) -> IO(Unit):
-  match got:
-    case EzStep.Lost{line}:
-      EzServer.server.lose(sock, line)
-    case EzStep.Kept{+req}:
-      http.step(C, run, srv, path, origins, ctx, sock, Http.method.of(req),
-        EzStep.step.of(req))
-
-def http.exchange.un(
-  ~C: Data,
-  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
-  ~srv: Server.Server,
-  ~path: String,
-  ~origins: List<&2, String>,
-  +ctx: C,
-  pair: Socket & EzStep.Got<Http.Request>
-) -> IO(Unit):
-  (sock, got) = pair
-  http.exchange.got(C, run, srv, path, origins, ctx, sock, got)
-
-# read one connection's request and answer it
-def http.exchange(
-  ~C: Data,
-  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
-  ~srv: Server.Server,
-  ~path: String,
-  ~origins: List<&2, String>,
-  +ctx: C,
-  sock: Socket
-) -> IO(Unit):
-  IO.bind(Socket & EzStep.Got<Http.Request>, Unit, EzServer.server.read(sock),
-    pair => http.exchange.un(C, run, srv, path, origins, ctx, pair))
-
-# after an accept: a failure is logged and the loop pauses; a connection is
-# served; then the loop goes on
-def http.loop.got(
-  ~C: Data,
-  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
-  ~srv: Server.Server,
-  ~path: String,
-  ~origins: List<&2, String>,
-  +ctx: C,
-  again: Listener -> IO(Unit),
-  lst: Listener,
-  got: EzStep.Got<Socket>
-) -> IO(Unit):
-  match got:
-    case EzStep.Lost{line}:
-      IO.bind(Unit, Unit, IO.print_err(line), _u =>
-        IO.bind(Unit, Unit, IO.sleep(EzServer.server.pause()), _v => again(lst)))
-    case EzStep.Kept{sock}:
-      IO.bind(Unit, Unit, http.exchange(C, run, srv, path, origins, ctx, sock),
-        _u => again(lst))
-
-def http.loop.cont(
-  ~C: Data,
-  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
-  ~srv: Server.Server,
-  ~path: String,
-  ~origins: List<&2, String>,
-  +ctx: C,
-  again: Listener -> IO(Unit),
-  pair: Listener & EzStep.Got<Socket>
-) -> IO(Unit):
-  (lst, got) = pair
-  http.loop.got(C, run, srv, path, origins, ctx, again, lst, got)
-
-# accept and serve `fuel` connections, then close the listener
-def http.loop.go(
-  ~C: Data,
-  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
-  ~srv: Server.Server,
-  ~path: String,
-  ~origins: List<&2, String>,
-  +ctx: C,
-  fuel: Nat,
-  listener: Listener
-) -> IO(Unit):
-  match fuel:
-    case 0n:
-      Listener.close(listener)
-    case 1n+f:
-      IO.bind(Listener & EzStep.Got<Socket>, Unit, EzServer.server.accept(listener),
-        pair => http.loop.cont(C, run, srv, path, origins, ctx,
-          lst => http.loop.go(C, run, srv, path, origins, ctx, f, lst), pair))
-
-# serve `limit` connections, then stop
+# serve `limit` connections, at most `max` at once (0: no limit), then stop
 def http.serve_with(
   ~C: Data,
   ~run: C -> String -> Value.Json -> IO(Rpc.Out),
@@ -223,26 +122,15 @@ def http.serve_with(
   +ctx: C,
   host: String,
   port: U32,
-  limit: U32
+  limit: U32,
+  +max: U32
 ) -> IO(Unit):
-  IO.bind(Listener, Unit, EzServer.server.listen(host, port),
-    lst => http.loop.go(C, run, srv, path, origins, ctx, U32.to_nat(limit), lst))
+  Ez.http.serve_io_with(~C,
+    ~(c => req => http.answer(C, run, srv, path, origins, c, req)), ctx, host,
+    port, limit, max)
 
-# accept and serve connections until the process is stopped
-@unsafe def http.forever.go(
-  ~C: Data,
-  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
-  ~srv: Server.Server,
-  ~path: String,
-  ~origins: List<&2, String>,
-  +ctx: C,
-  listener: Listener
-) -> IO(Unit):
-  IO.bind(Listener & EzStep.Got<Socket>, Unit, EzServer.server.accept(listener),
-    pair => http.loop.cont(C, run, srv, path, origins, ctx,
-      lst => http.forever.go(C, run, srv, path, origins, ctx, lst), pair))
-
-# serve until the process is stopped
+# serve until the process is stopped, at most `max` connections at once
+# (0: no limit)
 @unsafe def http.serve_forever_with(
   ~C: Data,
   ~run: C -> String -> Value.Json -> IO(Rpc.Out),
@@ -251,10 +139,12 @@ def http.serve_with(
   ~origins: List<&2, String>,
   +ctx: C,
   host: String,
-  port: U32
+  port: U32,
+  +max: U32
 ) -> IO(Unit):
-  IO.bind(Listener, Unit, EzServer.server.listen(host, port),
-    lst => http.forever.go(C, run, srv, path, origins, ctx, lst))
+  Ez.http.serve_forever_with(~C,
+    ~(c => req => http.answer(C, run, srv, path, origins, c, req)), ctx, host,
+    port, max)
 
 # --- with no context ---
 
@@ -269,7 +159,7 @@ def http.handle(
   http.handle_with(~Unit, ~(_c => n => a => run(n, a)), srv, path, origins,
     Unit{}, req)
 
-# serve `limit` connections, then stop
+# serve `limit` connections, as many at once as arrive, then stop
 def http.serve(
   ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
@@ -279,10 +169,10 @@ def http.serve(
   port: U32,
   limit: U32
 ) -> IO(Unit):
-  Ez.http.serve_io(~(req => http.handle(run, srv, path, origins, req)), host,
-    port, limit)
+  http.serve_with(~Unit, ~(_c => n => a => run(n, a)), srv, path, origins,
+    Unit{}, host, port, limit, 0)
 
-# serve until the process is stopped
+# serve until the process is stopped, as many connections at once as arrive
 @unsafe def http.serve_forever(
   ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
@@ -291,8 +181,8 @@ def http.serve(
   host: String,
   port: U32
 ) -> IO(Unit):
-  Ez.http.serve_forever(~(req => http.handle(run, srv, path, origins, req)),
-    host, port)
+  http.serve_forever_with(~Unit, ~(_c => n => a => run(n, a)), srv, path,
+    origins, Unit{}, host, port, 0)
 
 # --- stdio ---
 
@@ -462,8 +352,9 @@ def client.took(res: EzClient.Response) -> Rpc.Reply:
   match res:
     case EzClient.Err{why}:
       Rpc.Unread{why}
-    case EzClient.Response{status, +headers, body}:
-      Client.took(status, Http.headers.find(headers, "Content-Type"), body)
+    case EzClient.Response{status, +headers, reason, bytes}:
+      Client.took(status, Http.headers.find(headers, "Content-Type"),
+        Ez.body_text(bytes))
 
 # POST one request and read its reply
 def client.ask(
@@ -481,7 +372,7 @@ def client.sent(res: EzClient.Response) -> Bool:
   match res:
     case EzClient.Err{why}:
       False{}
-    case EzClient.Response{status, headers, body}:
+    case EzClient.Response{status, headers, reason, bytes}:
       Client.accepted(status)
 
 # POST one notification; whether the server accepted it

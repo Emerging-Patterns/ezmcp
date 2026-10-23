@@ -10,7 +10,7 @@
 # types src/server.bend, src/rpc.bend and src/web.bend name.
 import Base
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
-import 0xa4d47e5f0f6044ac1a983d1b051fa47a/src/http.bend as Http
+import 0xedb2120a04a47dc18c3a756ec7c62750/src/http.bend as Http
 import ./src/rpc.bend as Rpc
 import ./src/server.bend as Server
 import ./src/web.bend as Web
@@ -135,7 +135,9 @@ def http.handle(
 ) -> IO(Http.Reply):
   Io.http.handle(run, srv, path, origins, req)
 
-# serve the endpoint on host:port for `limit` connections, then stop
+# serve the endpoint on host:port for `limit` connections, each on its own
+# fork with no limit on how many at once, then stop once every connection is
+# closed
 def http.serve(
   ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
@@ -147,7 +149,8 @@ def http.serve(
 ) -> IO(Unit):
   Io.http.serve(run, srv, path, origins, host, port, limit)
 
-# serve the endpoint on host:port until the process is stopped
+# serve the endpoint on host:port until the process is stopped, each
+# connection on its own fork with no limit on how many at once
 @unsafe def http.serve_forever(
   ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
@@ -178,7 +181,8 @@ def http.handle_with(
   Io.http.handle_with(C, run, srv, path, origins, ctx, req)
 
 # serve the endpoint on host:port for `limit` connections, its runner given
-# `ctx`, then stop
+# `ctx`, each connection on its own fork and at most `max` at once (0: no
+# limit; 1: one at a time), then stop once every connection is closed
 def http.serve_with(
   ~C: Data,
   ~run: C -> String -> Value.Json -> IO(Rpc.Out),
@@ -188,12 +192,14 @@ def http.serve_with(
   +ctx: C,
   host: String,
   port: U32,
-  limit: U32
+  limit: U32,
+  max: U32
 ) -> IO(Unit):
-  Io.http.serve_with(C, run, srv, path, origins, ctx, host, port, limit)
+  Io.http.serve_with(C, run, srv, path, origins, ctx, host, port, limit, max)
 
-# serve the endpoint on host:port, its runner given `ctx`, until the process
-# is stopped
+# serve the endpoint on host:port, its runner given `ctx`, each connection on
+# its own fork and at most `max` at once (0: no limit; 1: one at a time),
+# until the process is stopped
 @unsafe def http.serve_forever_with(
   ~C: Data,
   ~run: C -> String -> Value.Json -> IO(Rpc.Out),
@@ -202,9 +208,10 @@ def http.serve_with(
   ~origins: List<&2, String>,
   +ctx: C,
   host: String,
-  port: U32
+  port: U32,
+  max: U32
 ) -> IO(Unit):
-  Io.http.serve_forever_with(C, run, srv, path, origins, ctx, host, port)
+  Io.http.serve_forever_with(C, run, srv, path, origins, ctx, host, port, max)
 
 # serve stdin and stdout, its runner given `ctx`, until stdin ends
 @unsafe def stdio.serve_with(
