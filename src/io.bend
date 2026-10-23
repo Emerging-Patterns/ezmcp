@@ -8,6 +8,8 @@ import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
 import 0xa4d47e5f0f6044ac1a983d1b051fa47a/main.bend as Ez
 import 0xa4d47e5f0f6044ac1a983d1b051fa47a/src/http.bend as Http
 import 0xa4d47e5f0f6044ac1a983d1b051fa47a/src/client.bend as EzClient
+import 0xa4d47e5f0f6044ac1a983d1b051fa47a/src/server.bend as EzServer
+import 0xa4d47e5f0f6044ac1a983d1b051fa47a/src/step.bend as EzStep
 import ./rpc.bend as Rpc
 import ./server.bend as Server
 import ./web.bend as Web
@@ -19,7 +21,9 @@ import ./client.bend as Client
 # one element of a batch, under revision `rev`: its reply, after running its
 # tool when it is a tool call; none for a notification or a response
 def act.reply(
-  ~run: String -> Value.Json -> IO(Rpc.Out),
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  +ctx: C,
   +rev: String,
   act: Server.Act
 ) -> IO(Maybe<&2, Value.Json>):
@@ -31,14 +35,16 @@ def act.reply(
     case Server.Fault{reply}:
       IO.pure(Maybe<&2, Value.Json>, Some{reply})
     case Server.Run{id, name, args}:
-      IO.bind(Rpc.Out, Maybe<&2, Value.Json>, run(name, args),
+      IO.bind(Rpc.Out, Maybe<&2, Value.Json>, run(ctx, name, args),
         out => IO.pure(Maybe<&2, Value.Json>, Some{Server.ran(rev, id, out)}))
     case Server.Batch{acts}:
       IO.pure(Maybe<&2, Value.Json>, None{})
 
 # every element of a batch, in order
 def act.all(
-  ~run: String -> Value.Json -> IO(Rpc.Out),
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  +ctx: C,
   +rev: String,
   acts: List<&2, Server.Act>
 ) -> IO(List<&2, Maybe<&2, Value.Json>>):
@@ -47,9 +53,9 @@ def act.all(
       IO.pure(List<&2, Maybe<&2, Value.Json>>, [])
     case a <> rest:
       IO.bind(Maybe<&2, Value.Json>, List<&2, Maybe<&2, Value.Json>>,
-        act.reply(run, rev, a),
+        act.reply(C, run, ctx, rev, a),
         r => IO.bind(List<&2, Maybe<&2, Value.Json>>,
-          List<&2, Maybe<&2, Value.Json>>, act.all(run, rev, rest),
+          List<&2, Maybe<&2, Value.Json>>, act.all(C, run, ctx, rev, rest),
           rs => IO.pure(List<&2, Maybe<&2, Value.Json>>, r <> rs)))
 
 # --- streamable HTTP ---
@@ -57,19 +63,200 @@ def act.all(
 # act on the transport's decision: reply now, or run the tool and reply
 # with its result, or run a batch's acts and reply with their replies
 def http.web(
-  ~run: String -> Value.Json -> IO(Rpc.Out),
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  +ctx: C,
   wid: Web.Web
 ) -> IO(Http.Reply):
   match wid:
     case Web.Now{status, headers, body}:
       IO.pure(Http.Reply, Http.Reply{status, headers, body})
     case Web.Later{rev, id, name, args}:
-      IO.bind(Rpc.Out, Http.Reply, run(name, args),
+      IO.bind(Rpc.Out, Http.Reply, run(ctx, name, args),
         out => IO.pure(Http.Reply, Web.reply(Web.ran(rev, id, out))))
     case Web.Many{+rev, acts}:
       IO.bind(List<&2, Maybe<&2, Value.Json>>, Http.Reply,
-        act.all(run, rev, acts),
+        act.all(C, run, ctx, rev, acts),
         rs => IO.pure(Http.Reply, Web.reply(Web.many(Server.batch.reply(rs)))))
+
+# one HTTP request to a server's endpoint at `path`
+def http.handle_with(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  req: Http.Request
+) -> IO(Http.Reply):
+  http.web(C, run, ctx, Web.decide(srv, path, origins, req))
+
+# --- serving HTTP with a context ---
+#
+# ezhttp's serve loops take a closed handler, which cannot carry a value
+# read at run time, so the loops below are ezhttp's serve_io and
+# serve_forever (its src/server.bend) with the context passed along; every
+# read, write and step of a connection is still ezhttp's (MCP-TRUST-2)
+
+# answer one request ezhttp read: its own reply, or the endpoint's
+def http.step(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  sock: Socket,
+  +method: String,
+  step: EzStep.Step
+) -> IO(Unit):
+  match step:
+    case EzStep.Answer{reply}:
+      EzServer.server.answer(sock, method, reply)
+    case EzStep.Call{req}:
+      IO.bind(Http.Reply, Unit, http.handle_with(C, run, srv, path, origins, ctx, req),
+        reply => EzServer.server.answer(sock, method, reply))
+
+# one connection's request, once read
+def http.exchange.got(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  sock: Socket,
+  got: EzStep.Got<Http.Request>
+) -> IO(Unit):
+  match got:
+    case EzStep.Lost{line}:
+      EzServer.server.lose(sock, line)
+    case EzStep.Kept{+req}:
+      http.step(C, run, srv, path, origins, ctx, sock, Http.method.of(req),
+        EzStep.step.of(req))
+
+def http.exchange.un(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  pair: Socket & EzStep.Got<Http.Request>
+) -> IO(Unit):
+  (sock, got) = pair
+  http.exchange.got(C, run, srv, path, origins, ctx, sock, got)
+
+# read one connection's request and answer it
+def http.exchange(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  sock: Socket
+) -> IO(Unit):
+  IO.bind(Socket & EzStep.Got<Http.Request>, Unit, EzServer.server.read(sock),
+    pair => http.exchange.un(C, run, srv, path, origins, ctx, pair))
+
+# after an accept: a failure is logged and the loop pauses; a connection is
+# served; then the loop goes on
+def http.loop.got(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  again: Listener -> IO(Unit),
+  lst: Listener,
+  got: EzStep.Got<Socket>
+) -> IO(Unit):
+  match got:
+    case EzStep.Lost{line}:
+      IO.bind(Unit, Unit, IO.print_err(line), _u =>
+        IO.bind(Unit, Unit, IO.sleep(EzServer.server.pause()), _v => again(lst)))
+    case EzStep.Kept{sock}:
+      IO.bind(Unit, Unit, http.exchange(C, run, srv, path, origins, ctx, sock),
+        _u => again(lst))
+
+def http.loop.cont(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  again: Listener -> IO(Unit),
+  pair: Listener & EzStep.Got<Socket>
+) -> IO(Unit):
+  (lst, got) = pair
+  http.loop.got(C, run, srv, path, origins, ctx, again, lst, got)
+
+# accept and serve `fuel` connections, then close the listener
+def http.loop.go(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  fuel: Nat,
+  listener: Listener
+) -> IO(Unit):
+  match fuel:
+    case 0n:
+      Listener.close(listener)
+    case 1n+f:
+      IO.bind(Listener & EzStep.Got<Socket>, Unit, EzServer.server.accept(listener),
+        pair => http.loop.cont(C, run, srv, path, origins, ctx,
+          lst => http.loop.go(C, run, srv, path, origins, ctx, f, lst), pair))
+
+# serve `limit` connections, then stop
+def http.serve_with(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  host: String,
+  port: U32,
+  limit: U32
+) -> IO(Unit):
+  IO.bind(Listener, Unit, EzServer.server.listen(host, port),
+    lst => http.loop.go(C, run, srv, path, origins, ctx, U32.to_nat(limit), lst))
+
+# accept and serve connections until the process is stopped
+@unsafe def http.forever.go(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  listener: Listener
+) -> IO(Unit):
+  IO.bind(Listener & EzStep.Got<Socket>, Unit, EzServer.server.accept(listener),
+    pair => http.loop.cont(C, run, srv, path, origins, ctx,
+      lst => http.forever.go(C, run, srv, path, origins, ctx, lst), pair))
+
+# serve until the process is stopped
+@unsafe def http.serve_forever_with(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  host: String,
+  port: U32
+) -> IO(Unit):
+  IO.bind(Listener, Unit, EzServer.server.listen(host, port),
+    lst => http.forever.go(C, run, srv, path, origins, ctx, lst))
+
+# --- with no context ---
 
 # one HTTP request to a server's endpoint at `path`
 def http.handle(
@@ -79,7 +266,8 @@ def http.handle(
   ~origins: List<&2, String>,
   req: Http.Request
 ) -> IO(Http.Reply):
-  http.web(run, Web.decide(srv, path, origins, req))
+  http.handle_with(~Unit, ~(_c => n => a => run(n, a)), srv, path, origins,
+    Unit{}, req)
 
 # serve `limit` connections, then stop
 def http.serve(
@@ -130,7 +318,9 @@ def stdio.batch(replies: Maybe<&2, Value.Json>) -> IO(Unit):
 # or run the tool and write its reply, or run a batch's acts and write the
 # array of their replies, or write nothing
 def stdio.act(
-  ~run: String -> Value.Json -> IO(Rpc.Out),
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  +ctx: C,
   +rev: String,
   act: Server.Act
 ) -> IO(Unit):
@@ -142,28 +332,32 @@ def stdio.act(
     case Server.Fault{reply}:
       IO.write(Line.frame(reply))
     case Server.Run{id, name, args}:
-      IO.bind(Rpc.Out, Unit, run(name, args),
+      IO.bind(Rpc.Out, Unit, run(ctx, name, args),
         out => IO.write(Line.frame(Server.ran(rev, id, out))))
     case Server.Batch{acts}:
-      IO.bind(List<&2, Maybe<&2, Value.Json>>, Unit, act.all(run, rev, acts),
+      IO.bind(List<&2, Maybe<&2, Value.Json>>, Unit, act.all(C, run, ctx, rev, acts),
         rs => stdio.batch(Server.batch.reply(rs)))
 
 # act on a turn read by revision `rev`, then go on with the revision after it
 def stdio.turn(
-  ~run: String -> Value.Json -> IO(Rpc.Out),
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  +ctx: C,
   +rev: String,
   turn: Server.Turn,
   next: String -> IO(String)
 ) -> IO(String):
   match turn:
     case Server.Turn{act, after}:
-      IO.bind(Unit, String, stdio.act(run, rev, act), _u => next(after))
+      IO.bind(Unit, String, stdio.act(C, run, ctx, rev, act), _u => next(after))
 
 # every whole line, in order, each read by the revision the line before it
 # left; answers the revision the last one left
 def stdio.lines(
-  ~run: String -> Value.Json -> IO(Rpc.Out),
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
+  +ctx: C,
   lines: List<&2, List<&2, U32>>,
   +rev: String
 ) -> IO(String):
@@ -171,27 +365,31 @@ def stdio.lines(
     case []:
       IO.pure(String, rev)
     case line <> rest:
-      stdio.turn(run, rev, Line.line(srv, rev, line),
-        after => stdio.lines(run, srv, rest, after))
+      stdio.turn(C, run, ctx, rev, Line.line(srv, rev, line),
+        after => stdio.lines(C, run, srv, ctx, rest, after))
 
 # act on a cut's whole lines, then read on with its rest
 def stdio.cut(
-  ~run: String -> Value.Json -> IO(Rpc.Out),
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
+  +ctx: C,
   rev: String,
   again: List<&2, U32> -> String -> IO(Unit),
   cut: Line.Cut
 ) -> IO(Unit):
   match cut:
     case Line.Cut{lines, rest}:
-      IO.bind(String, Unit, stdio.lines(run, srv, lines, rev),
+      IO.bind(String, Unit, stdio.lines(C, run, srv, ctx, lines, rev),
         after => again(rest, after))
 
 # after a read: an empty one is the end of stdin, and the bytes after the
 # last newline are the last message; any other is cut into lines
 def stdio.chunked(
-  ~run: String -> Value.Json -> IO(Rpc.Out),
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
+  +ctx: C,
   rev: String,
   buf: List<&2, U32>,
   bytes: List<&2, U32>,
@@ -200,16 +398,18 @@ def stdio.chunked(
 ) -> IO(Unit):
   match empty:
     case True{}:
-      IO.bind(String, Unit, stdio.lines(run, srv, [buf], rev),
+      IO.bind(String, Unit, stdio.lines(C, run, srv, ctx, [buf], rev),
         _r => IO.pure(Unit, Unit{}))
     case False{}:
-      stdio.cut(run, srv, rev, again,
+      stdio.cut(C, run, srv, ctx, rev, again,
         Line.cut(List.append(&2, U32, buf, bytes)))
 
 # after one read: a failure is logged to stderr and ends the loop
 def stdio.got(
-  ~run: String -> Value.Json -> IO(Rpc.Out),
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
+  +ctx: C,
   rev: String,
   buf: List<&2, U32>,
   again: List<&2, U32> -> String -> IO(Unit),
@@ -219,29 +419,41 @@ def stdio.got(
     case Fail{(_code, why)}:
       IO.print_err("ezmcp: stdin: " ++ why)
     case Done{+bytes}:
-      stdio.chunked(run, srv, rev, buf, bytes, again,
+      stdio.chunked(C, run, srv, ctx, rev, buf, bytes, again,
         List.is_empty(&2, U32, bytes))
 
 # read, act on every whole line, and read again until stdin ends; `rev` is
 # the revision the next line is read by
 @unsafe def stdio.loop(
-  ~run: String -> Value.Json -> IO(Rpc.Out),
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
+  +ctx: C,
   buf: List<&2, U32>,
   rev: String
 ) -> IO(Unit):
   IO.bind(Result<&1, &1, U32 & String, List<&2, U32>>, Unit,
     ezmcp.stdin(stdio.chunk()),
-    res => stdio.got(run, srv, rev, buf,
-      rest => after => stdio.loop(run, srv, rest, after), res))
+    res => stdio.got(C, run, srv, ctx, rev, buf,
+      rest => after => stdio.loop(C, run, srv, ctx, rest, after), res))
 
 # serve newline-delimited JSON-RPC on stdin and stdout until stdin ends; a
 # line is read by the latest revision until an initialize names another
+@unsafe def stdio.serve_with(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  +ctx: C
+) -> IO(Unit):
+  stdio.loop(C, run, srv, ctx, [], Server.latest())
+
+# serve newline-delimited JSON-RPC on stdin and stdout until stdin ends,
+# with no context
 @unsafe def stdio.serve(
   ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server
 ) -> IO(Unit):
-  stdio.loop(run, srv, [], Server.latest())
+  stdio.serve_with(~Unit, ~(_c => n => a => run(n, a)), srv, Unit{})
 
 # --- client ---
 
