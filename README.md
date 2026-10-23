@@ -32,10 +32,11 @@ values. Build them with the ezjson ezmcp is locked to (v1.2.0), so the two
 agree on the type: `ez add Emerging-Patterns/ezjson v1.2.0`.
 
 ezmcp imports its dependencies by hash: ezjson v1.2.0
-(`0xa81e161008ecc2f297c0a3065cb9b188`) and ezhttp v0.14.0
-(`0xa4d47e5f0f6044ac1a983d1b051fa47a`). A project that uses ezhttp too
-shares one copy with ezmcp only when it adds the same release
-(`ez add Emerging-Patterns/ezhttp v0.14.0`); any other release is a second
+(`0xa81e161008ecc2f297c0a3065cb9b188`) and ezhttp at `cab153b`
+(`0xedb2120a04a47dc18c3a756ec7c62750`). A project that uses ezhttp too
+shares one copy with ezmcp only when it adds the same commit
+(`ez add https://github.com/Emerging-Patterns/ezhttp cab153b2bf4308127f454d8e204e6c85ae50aaaa`);
+any other commit is a second
 package in its lock and its binary, and ezmcp's server runs on the one
 ezmcp names. ez has no override or version range that redirects a
 dependency's `0x` import, so the way to one copy is to keep the two
@@ -99,11 +100,22 @@ def run(base: String, tool: String, args: Value.Json) -> IO(Rpc.Out):
 @unsafe def main() -> IO(Unit):
   IO.bind(String, Unit, IO.try(String, IO.get_env("API_BASE")),
     base => Mcp.http.serve_forever_with(~String, ~run, ~srv(), ~"/mcp", ~[],
-      base, "127.0.0.1", 8000))
+      base, "127.0.0.1", 8000, 0))
 ```
 
 `Mcp.stdio.serve_with(~C, ~run, ~srv, ctx)`, `Mcp.http.serve_with` (for
 `limit` connections) and `Mcp.http.handle_with` do the same.
+
+### Connections at once
+
+The HTTP serves run on ezhttp, which serves each connection on its own
+fork, so slow tool calls from different clients (or one client's
+concurrent requests) overlap. ezmcp keeps nothing between requests, so the
+runner is the only place two calls can meet. `http.serve` and
+`http.serve_forever` take as many connections at once as arrive; the
+`_with` serves take a last argument `max`, the most at once (`0` for no
+limit, `1` to run one call at a time, as for a tool that drives one
+browser).
 
 `Mcp.stdio.serve(~run, ~srv())` serves the same server on stdin and stdout
 instead; write logs with `IO.print_err`, never to stdout. To mount the
@@ -128,8 +140,8 @@ endpoint in an ezhttp server that serves other paths too, hand requests to
 | `http.handle(~run, ~srv, ~path, ~origins, req)` | `IO(Http.Reply)` | one request, as an ezhttp IO handler |
 | `http.decide(srv, path, origins, req)` | `Web.Web` | the transport's decision for one request, with no IO |
 | `stdio.serve(~run, ~srv)` | `IO(Unit)` | serve stdin and stdout until stdin ends (`@unsafe`) |
-| `http.serve_forever_with(~C, ~run, ~srv, ~path, ~origins, ctx, host, port)` | `IO(Unit)` | `http.serve_forever` with a runner `C -> String -> Json -> IO(Rpc.Out)` given `ctx` (`@unsafe`) |
-| `http.serve_with(~C, ~run, ~srv, ~path, ~origins, ctx, host, port, limit)` | `IO(Unit)` | `http.serve` with a context |
+| `http.serve_forever_with(~C, ~run, ~srv, ~path, ~origins, ctx, host, port, max)` | `IO(Unit)` | `http.serve_forever` with a runner `C -> String -> Json -> IO(Rpc.Out)` given `ctx`, at most `max` connections at once (0: no limit) (`@unsafe`) |
+| `http.serve_with(~C, ~run, ~srv, ~path, ~origins, ctx, host, port, limit, max)` | `IO(Unit)` | `http.serve` with a context, at most `max` connections at once |
 | `http.handle_with(~C, ~run, ~srv, ~path, ~origins, ctx, req)` | `IO(Http.Reply)` | `http.handle` with a context |
 | `stdio.serve_with(~C, ~run, ~srv, ctx)` | `IO(Unit)` | `stdio.serve` with a context (`@unsafe`) |
 | `step(srv, rev, text)` | `Server.Act` | what a server does with one message read by revision `rev`, for a transport of your own |
@@ -176,6 +188,11 @@ initialize result as `version` from then on. `client.initialize`,
 `client.initialized()`, `client.tools(id)` and `client.call(id, name, args)`
 build the messages. The client has no sessions, so it talks to stateless
 servers.
+
+The client runs on ezhttp's sockets (bend-kit-wire). For an `https://`
+endpoint OpenSSL 3 is loaded at run time; point `BEND_LIBSSL` at
+`libssl.so.3` when it is not where the loader looks (`EZ_LIBSSL` is no
+longer read).
 
 ## Examples
 
