@@ -6,3 +6,5 @@ bin/
 .gate/
 *.gpu
 .claude/
+examples/*/*
+!examples/*/*.bend
