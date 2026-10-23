@@ -21,12 +21,12 @@ import ./src/io.bend as Io
 
 # a tool: its name, a description for the model, and the JSON Schema of its
 # arguments (an object schema)
-def tool(name: String, description: String, input: Value.Json) -> Server.Tool:
+def tool(name: String, description: String, input: Value.Json) -> Server.Tool:  # noqa: L001 the Server.Tool constructor
   Server.Tool{name, description, input}
 
 # a server: name and version (serverInfo), instructions for the client ("" for
 # none), and its tools in the order tools/list shows them
-def server(
+def server(  # noqa: L001 the Server.Server constructor
   name: String,
   version: String,
   instructions: String,
@@ -35,11 +35,11 @@ def server(
   Server.Server{name, version, instructions, tools}
 
 # the latest protocol revision ezmcp speaks
-def latest() -> String:
+def latest() -> String:  # noqa: L001 re-export of Server.latest
   Server.latest()
 
 # the protocol revisions ezmcp speaks, oldest first
-def revisions() -> List<&2, String>:
+def revisions() -> List<&2, String>:  # noqa: L001 re-export of Server.revisions
   Server.revisions()
 
 # what a server does with one message's text, read by revision `rev`: Quiet
@@ -47,18 +47,18 @@ def revisions() -> List<&2, String>:
 # could not accept), Run (run a tool, then send `ran` of its result), or,
 # under 2025-03-26, Batch (do each of its acts, then send `batch.reply` of
 # their replies). For a transport of your own
-def step(srv: Server.Server, rev: String, text: String) -> Server.Act:
+def step(srv: Server.Server, rev: String, text: String) -> Server.Act:  # noqa: L001 re-export of Server.step
   Server.step(srv, rev, text)
 
 # `step`'s act, and the revision a stream's next message is read by: the one
 # an initialize was answered with, else `rev`. For a stream transport of your
 # own, which starts at `latest()`
-def turn(srv: Server.Server, rev: String, text: String) -> Server.Turn:
+def turn(srv: Server.Server, rev: String, text: String) -> Server.Turn:  # noqa: L001 re-export of Server.turn
   Server.turn(srv, rev, text)
 
 # the reply to a tool call with this id under revision `rev`, once the
 # runner answered (2025-03-26 leaves structuredContent out)
-def ran(rev: String, id: Value.Json, out: Rpc.Out) -> Value.Json:
+def ran(rev: String, id: Value.Json, out: Rpc.Out) -> Value.Json:  # noqa: L001 re-export of Server.ran
   Server.ran(rev, id, out)
 
 # what a batch sends back, from its acts' replies in order (None for an act
@@ -70,13 +70,13 @@ def batch.reply(replies: List<&2, Maybe<&2, Value.Json>>) -> Maybe<&2, Value.Jso
 
 # a runner's answer for a tool that ran: its tool result, which may itself
 # report a failure with `isError` (`result.error`)
-def ok(result: Value.Json) -> Rpc.Out:
+def ok(result: Value.Json) -> Rpc.Out:  # noqa: L001 the Rpc.Ok constructor
   Rpc.Ok{result}
 
 # a runner's answer for a call it refuses as a protocol error: a JSON-RPC
 # error with this code and message instead of a tool result
 # (server/tools#error-handling)
-def refuse(code: Rpc.Code, message: String) -> Rpc.Out:
+def refuse(code: Rpc.Code, message: String) -> Rpc.Out:  # noqa: L001 the Rpc.Err constructor
   Rpc.Err{code, message}
 
 # refuse with -32602 Invalid params, as for arguments that do not match the
@@ -91,12 +91,12 @@ def refuse.internal(message: String) -> Rpc.Out:
 # --- tool results ---
 
 # a text content block
-def text(text2: String) -> Value.Json:
+def text(text2: String) -> Value.Json:  # noqa: L001 re-export of Server.text
   Server.text(text2)
 
 # a tool result from content blocks; is_error flags a tool that failed, so
 # the model sees the failure (server/tools#error-handling)
-def result(blocks: List<&2, Value.Json>, is_error: Bool) -> Value.Json:
+def result(blocks: List<&2, Value.Json>, is_error: Bool) -> Value.Json:  # noqa: L001 re-export of Server.result
   Server.result(blocks, is_error)
 
 # a tool result of one text block

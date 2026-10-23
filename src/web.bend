@@ -219,7 +219,7 @@ def decide(
         Http.headers.find(headers, "MCP-Protocol-Version"), body)
 
 # a Web reply as ezhttp's reply (a Later or a Many never reaches here)
-def reply(wid: Web) -> Http.Reply:
+def reply(wid: Web) -> Http.Reply:  # noqa: L001 only src/io.bend calls it (MCP-TRUST-1)
   match wid:
     case Now{status, headers, body}:
       Http.Reply{status, headers, body}

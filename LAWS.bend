@@ -1332,6 +1332,16 @@ law line_message:
   {Line.line.text(srv, rev, text) == Server.turn(srv, rev, text)
     : Server.Turn}
 
+# LAW: a line is read whole, decoded from UTF-8, then judged as text
+# MCP-STDIO-2
+# MCP-STDIO-3
+law line_decoded:
+  for srv: Server.Server
+  for rev: String
+  for bs: List<&2, U32>
+  {Line.line(srv, rev, bs) == Line.line.text(srv, rev, Line.decode(bs))
+    : Server.Turn}
+
 # LAW: a message on stdout is its JSON text and one newline
 # MCP-STDIO-4
 law frame_line:
@@ -1363,6 +1373,13 @@ law call_request:
   for args: Value.Json
   {Client.call(id, name, args) == Rpc.request(id, "tools/call",
     Json.obj([("name", Json.str(name)), ("arguments", args)])) : Value.Json}
+
+# LAW: a tools/list request has no params of its own
+# MCP-CLIENT-1
+law tools_request:
+  for id: Value.Json
+  {Client.tools(id) == Rpc.request(id, "tools/list", Json.obj([]))
+    : Value.Json}
 
 # LAW: initialize sends the latest revision, capabilities and clientInfo
 # MCP-CLIENT-2
@@ -1404,6 +1421,17 @@ law took_ok:
   for status: U32
   {Client.took.ok(ctype, text, True{}, status)
     == Rpc.read(Client.body(Client.is.sse(ctype), text)) : Rpc.Reply}
+
+# LAW: a reply is judged by whether its status is 200
+# MCP-CLIENT-4
+# MCP-CLIENT-5
+law took_status_200:
+  for status: U32
+  for ctype: String
+  for text: String
+  {Client.took(status, ctype, text)
+    == Client.took.ok(ctype, text, U32.is_eq(status, 200), status)
+    : Rpc.Reply}
 
 # LAW: an event stream's JSON text is its last data
 # MCP-CLIENT-4
@@ -1499,3 +1527,10 @@ law took_status:
   for status: U32
   {Client.took.ok(ctype, text, False{}, status)
     == Rpc.Unread{"HTTP " ++ U32.show(status) ++ ": " ++ text} : Rpc.Reply}
+
+# LAW: the revision an initialize result names is its protocolVersion
+# MCP-CLIENT-6
+law version_named:
+  for v: String
+  {Client.version(Json.obj([("protocolVersion", Json.str(v))])) == v
+    : String}
