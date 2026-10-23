@@ -4,12 +4,14 @@ import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/lazy.bend as Lazy
 import 0xedb2120a04a47dc18c3a756ec7c62750/src/http.bend as Http
+import 0xedb2120a04a47dc18c3a756ec7c62750/src/qs.bend as Qs
 import ./src/rpc.bend as Rpc
 import ./src/server.bend as Server
 import ./src/web.bend as Web
 import ./src/line.bend as Line
 import ./src/sse.bend as Sse
 import ./src/client.bend as Client
+import ./src/openapi.bend as Openapi
 import ./LAWS.bend as Laws
 
 # --- Bool, Char and String facts ---
@@ -1273,4 +1275,503 @@ def Laws.without_keeps_bind(src, num, v, r, key, e):
   {==}
 
 def Laws.version_named(_v):
+  {==}
+
+# --- OpenAPI (MCP-OAS) ---
+
+def Laws.oas_ops(_doc):
+  {==}
+
+def Laws.oas_paths(_path, _it, _rest, _doc):
+  {==}
+
+def Laws.oas_methods(_doc, _path, _it, _ips):
+  {==}
+
+def Laws.oas_item_take(method, ms, doc, path, it, ips, e):
+  f = Equal.sym(Bool, Json.is_obj(Json.get(it, method)), True{}, e)
+  %f : {Openapi.item.at(_, doc, path, method, ips, Json.get(it, method),
+    Openapi.item(ms, doc, path, it, ips))
+    == Openapi.op(doc, path, method, ips, Json.get(it, method))
+      <> Openapi.item(ms, doc, path, it, ips) : List<&2, Openapi.Op>}
+  {==}
+
+def Laws.oas_item_skip(method, ms, doc, path, it, ips, e):
+  f = Equal.sym(Bool, Json.is_obj(Json.get(it, method)), False{}, e)
+  %f : {Openapi.item.at(_, doc, path, method, ips, Json.get(it, method),
+    Openapi.item(ms, doc, path, it, ips))
+    == Openapi.item(ms, doc, path, it, ips) : List<&2, Openapi.Op>}
+  {==}
+
+# members read back from the cells they make are those members
+def oas.members_cells(
+  ps: List<&2, Openapi.Mem()>
+) -> {Openapi.members.go(Openapi.cells(ps)) == ps : List<&2, Openapi.Mem()>}:
+  match ps:
+    case []:
+      {==}
+    case (key, val) <> rest:
+      Equal.cong(List<&2, Openapi.Mem()>, List<&2, Openapi.Mem()>,
+        r => (key, val) <> r, Openapi.members.go(Openapi.cells(rest)), rest,
+        oas.members_cells(rest))
+
+def Laws.oas_members(ps):
+  oas.members_cells(ps)
+
+def Laws.oas_name_id(id, method, path, e):
+  f = Equal.sym(Bool, String.is_empty(id), False{}, e)
+  %f : {Openapi.sanitize(Maybe.default(&2, String, Bool.pick(Maybe<&2, String>,
+    _, None{}, Some{id}), Openapi.generated(method, path)))
+    == Openapi.sanitize(id) : String}
+  {==}
+
+def Laws.oas_name_none(_method, _path):
+  {==}
+
+def Laws.oas_sanitize_keep(cp, rest, e):
+  f = Equal.sym(Bool, Openapi.name.ok(cp), True{}, e)
+  %f : {SCon{Openapi.name.char(_, cp), Openapi.sanitize(rest)}
+    == SCon{Chr{cp}, Openapi.sanitize(rest)} : String}
+  {==}
+
+def Laws.oas_sanitize_swap(cp, rest, e):
+  f = Equal.sym(Bool, Openapi.name.ok(cp), False{}, e)
+  %f : {SCon{Openapi.name.char(_, cp), Openapi.sanitize(rest)}
+    == SCon{'_', Openapi.sanitize(rest)} : String}
+  {==}
+
+# a sanitized string is as long as the string
+def oas.sanitize_len(
+  text: String
+) -> {String.length(Openapi.sanitize(text)) == String.length(text) : Nat}:
+  match text:
+    case SNil{}:
+      {==}
+    case SCon{Chr{cp}, rest}:
+      Equal.cong(Nat, Nat, n => 1n+n, String.length(Openapi.sanitize(rest)),
+        String.length(rest), oas.sanitize_len(rest))
+
+def Laws.oas_sanitize_length(text):
+  oas.sanitize_len(text)
+
+def Laws.oas_tool(_name, _description, _input, _method, _path, _params, _media):
+  {==}
+
+def Laws.oas_name(_name, _description, _input, _method, _path, _params, _media):
+  {==}
+
+def Laws.oas_renamed(_name, _description, _input, _method, _path, _params, _media, _to):
+  {==}
+
+def Laws.oas_describe_desc(desc, summary, method, path, e):
+  f = Equal.sym(Bool, String.is_empty(desc), False{}, e)
+  %f : {Maybe.default(&2, String, Openapi.first(Bool.pick(Maybe<&2, String>, _,
+    None{}, Some{desc}), Openapi.full(summary)),
+    "Executes " ++ String.to_upper(method) ++ " " ++ path) == desc : String}
+  {==}
+
+def Laws.oas_describe_summary(summary, method, path, e):
+  f = Equal.sym(Bool, String.is_empty(summary), False{}, e)
+  %f : {Maybe.default(&2, String, Bool.pick(Maybe<&2, String>, _, None{},
+    Some{summary}), "Executes " ++ String.to_upper(method) ++ " " ++ path)
+    == summary : String}
+  {==}
+
+def Laws.oas_describe_none(_method, _path):
+  {==}
+
+def Laws.oas_merge_none(_ps):
+  {==}
+
+def Laws.oas_merge_one(_one, _rest, _ps):
+  {==}
+
+def Laws.oas_put_param_last(_new):
+  {==}
+
+def Laws.oas_put_param_same(old, rest, new, e):
+  f = Equal.sym(Bool, Openapi.same(old, new), True{}, e)
+  %f : {Openapi.params.put.at(_, old, rest, new,
+    _u => Openapi.params.put(rest, new)) == new <> rest : List<&2, Value.Json>}
+  {==}
+
+def Laws.oas_put_param_other(old, rest, new, e):
+  f = Equal.sym(Bool, Openapi.same(old, new), False{}, e)
+  %f : {Openapi.params.put.at(_, old, rest, new,
+    _u => Openapi.params.put(rest, new))
+    == old <> Openapi.params.put(rest, new) : List<&2, Value.Json>}
+  {==}
+
+def Laws.oas_same(_left, _right):
+  {==}
+
+def Laws.oas_param_put(_name, _one, _props, _req):
+  {==}
+
+def Laws.oas_param_unnamed(_ok, _one, _st):
+  {==}
+
+def Laws.oas_param_unschemed(name, _one, _st):
+  match name:
+    case None{}:
+      {==}
+    case Some{_got}:
+      {==}
+
+def Laws.oas_need(_req, _name):
+  {==}
+
+def Laws.oas_need_not(_req, _name):
+  {==}
+
+def Laws.oas_put_last(_key, _val):
+  {==}
+
+def Laws.oas_put_hit(k2, v2, rest, key, val, e):
+  f = Equal.sym(Bool, String.eq(k2, key), True{}, e)
+  %f : {Openapi.put.at(_, k2, v2, rest, key, val, _u => Openapi.put(rest, key,
+    val)) == (key, val) <> rest : List<&2, Openapi.Mem()>}
+  {==}
+
+def Laws.oas_put_miss(k2, v2, rest, key, val, e):
+  f = Equal.sym(Bool, String.eq(k2, key), False{}, e)
+  %f : {Openapi.put.at(_, k2, v2, rest, key, val, _u => Openapi.put(rest, key,
+    val)) == (k2, v2) <> Openapi.put(rest, key, val) : List<&2, Openapi.Mem()>}
+  {==}
+
+def Laws.oas_described(_cs, _desc):
+  {==}
+
+def Laws.oas_described_none(_val):
+  {==}
+
+def Laws.oas_media_json(content, e):
+  f = Equal.sym(Bool, Openapi.schema.ok(Json.get(Json.get(content,
+    "application/json"), "schema")), True{}, e)
+  %f : {Openapi.media.at(_, content) == "application/json" : String}
+  {==}
+
+def Laws.oas_media_other(content, e):
+  f = Equal.sym(Bool, Openapi.schema.ok(Json.get(Json.get(content,
+    "application/json"), "schema")), False{}, e)
+  %f : {Openapi.media.at(_, content)
+    == Openapi.media.first(Openapi.members(content)) : String}
+  {==}
+
+def Laws.oas_body_none(_rb, _st):
+  {==}
+
+def Laws.oas_body_json(_rb, _props, _req):
+  {==}
+
+def Laws.oas_body_text(rb, mt, props, req, none, json):
+  f1 = Equal.sym(Bool, String.is_empty(mt), False{}, none)
+  f2 = Equal.sym(Bool, String.eq(mt, "application/json"), False{}, json)
+  %f1 : {Openapi.input.body.at(_, rb, mt, Openapi.In{props, req})
+    == Openapi.In{Openapi.put(props, "requestBody", Openapi.body.text(rb, mt)),
+      Openapi.need(req, "requestBody", Openapi.is_true(Json.get(rb,
+      "required")))} : Openapi.In}
+  %f2 : {Openapi.In{Openapi.put(props, "requestBody", Openapi.body.schema(_, rb,
+    mt)), Openapi.need(req, "requestBody", Openapi.is_true(Json.get(rb,
+    "required")))}
+    == Openapi.In{Openapi.put(props, "requestBody", Openapi.body.text(rb, mt)),
+      Openapi.need(req, "requestBody", Openapi.is_true(Json.get(rb,
+      "required")))} : Openapi.In}
+  {==}
+
+def Laws.oas_input(_props, _req):
+  {==}
+
+def Laws.oas_required_none(req, e):
+  match req:
+    case []:
+      {==}
+    case one <> rest:
+      absurd(&2, {Openapi.required(one <> rest) == [] : List<&2, Openapi.Mem()>}, e)
+
+def Laws.oas_required_some(_one, _rest):
+  {==}
+
+def Laws.oas_number(typ, e):
+  f = Equal.sym(Bool, Openapi.is_str(typ, "integer"), True{}, e)
+  %f : {Bool.pick(Value.Json, _, Json.str("number"), typ) == Json.str("number")
+    : Value.Json}
+  {==}
+
+def Laws.oas_number_other(typ, e):
+  f = Equal.sym(Bool, Openapi.is_str(typ, "integer"), False{}, e)
+  %f : {Bool.pick(Value.Json, _, Json.str("number"), typ) == typ : Value.Json}
+  {==}
+
+def Laws.oas_drop_last(_key):
+  {==}
+
+def Laws.oas_drop_hit(k2, v2, rest, key, e):
+  f = Equal.sym(Bool, String.eq(k2, key), True{}, e)
+  %f : {Openapi.drop.at(_, k2, v2, Openapi.drop(rest, key))
+    == Openapi.drop(rest, key) : List<&2, Openapi.Mem()>}
+  {==}
+
+def Laws.oas_drop_miss(k2, v2, rest, key, e):
+  f = Equal.sym(Bool, String.eq(k2, key), False{}, e)
+  %f : {Openapi.drop.at(_, k2, v2, Openapi.drop(rest, key))
+    == (k2, v2) <> Openapi.drop(rest, key) : List<&2, Openapi.Mem()>}
+  {==}
+
+def Laws.oas_typed_none(_ps, _nullable):
+  {==}
+
+def Laws.oas_typed(_ps, _typ):
+  {==}
+
+def Laws.oas_typed_null(_ps, _typ):
+  {==}
+
+def Laws.oas_null_name(_name):
+  {==}
+
+def Laws.oas_kids_object(ps, e):
+  f = Equal.sym(Bool, Openapi.is_str(Openapi.value(ps, "type"), "object"),
+    True{}, e)
+  %f : {Openapi.kids.of(_, Openapi.is_str(Openapi.value(ps, "type"), "array"), ps)
+    == Openapi.kids.props(Openapi.value(ps, "properties")) : Openapi.Kids}
+  {==}
+
+def Laws.oas_kids_array(ps, eo, ea):
+  fo = Equal.sym(Bool, Openapi.is_str(Openapi.value(ps, "type"), "object"),
+    False{}, eo)
+  fa = Equal.sym(Bool, Openapi.is_str(Openapi.value(ps, "type"), "array"),
+    True{}, ea)
+  %fo : {Openapi.kids.of(_, Openapi.is_str(Openapi.value(ps, "type"), "array"), ps)
+    == Openapi.kids.item(Openapi.value(ps, "items")) : Openapi.Kids}
+  %fa : {Openapi.kids.array(_, ps) == Openapi.kids.item(Openapi.value(ps, "items"))
+    : Openapi.Kids}
+  {==}
+
+def Laws.oas_kids_none(ps, eo, ea):
+  fo = Equal.sym(Bool, Openapi.is_str(Openapi.value(ps, "type"), "object"),
+    False{}, eo)
+  fa = Equal.sym(Bool, Openapi.is_str(Openapi.value(ps, "type"), "array"),
+    False{}, ea)
+  %fo : {Openapi.kids.of(_, Openapi.is_str(Openapi.value(ps, "type"), "array"), ps)
+    == Openapi.NoKids{} : Openapi.Kids}
+  %fa : {Openapi.kids.array(_, ps) == Openapi.NoKids{} : Openapi.Kids}
+  {==}
+
+def Laws.oas_prop_map(_cs):
+  {==}
+
+def Laws.oas_prop_keep(_flag):
+  {==}
+
+def Laws.oas_token_slash(_rest):
+  {==}
+
+def Laws.oas_token_tilde(_rest):
+  {==}
+
+def Laws.oas_resolve_local(doc, ref, e):
+  f = Equal.sym(Bool, String.starts_with(ref, "#/"), True{}, e)
+  %f : {Openapi.resolve.at(_, doc, ref)
+    == Openapi.walk(String.split(String.drop(ref, 2n), '/'), doc)
+    : Maybe<&2, Value.Json>}
+  {==}
+
+def Laws.oas_resolve_other(doc, ref, e):
+  f = Equal.sym(Bool, String.starts_with(ref, "#/"), False{}, e)
+  %f : {Openapi.resolve.at(_, doc, ref) == None{} : Maybe<&2, Value.Json>}
+  {==}
+
+def Laws.oas_walk_done(_val):
+  {==}
+
+def Laws.oas_walk_miss(tok, rest, val, e):
+  f = Equal.sym(Bool, Json.has(val, Openapi.token(tok)), False{}, e)
+  %f : {Openapi.walk.at(_, Json.get(val, Openapi.token(tok)),
+    got => Openapi.walk(rest, got)) == None{} : Maybe<&2, Value.Json>}
+  {==}
+
+def Laws.oas_merge_bare(_target):
+  {==}
+
+def Laws.oas_merge_sib(_one, _rest, _target):
+  {==}
+
+def Laws.oas_merge_add_hit(key, val, rest, sib, e):
+  f = Equal.sym(Bool, Openapi.named(sib, key), True{}, e)
+  %f : {Openapi.merge.add(rest, Openapi.merge.one(_, sib, key, val))
+    == Openapi.merge.add(rest, sib) : List<&2, Openapi.Mem()>}
+  {==}
+
+def Laws.oas_merge_add_miss(key, val, rest, sib, e):
+  f = Equal.sym(Bool, Openapi.named(sib, key), False{}, e)
+  %f : {Openapi.merge.add(rest, Openapi.merge.one(_, sib, key, val))
+    == Openapi.merge.add(rest, List.append(&2, Openapi.Mem(), sib, [(key, val)]))
+    : List<&2, Openapi.Mem()>}
+  {==}
+
+def Laws.oas_deref_cycle(less, pairs, doc, refs, ref, er, es):
+  fr = Equal.sym(Maybe<&2, String>, Openapi.ref.of(pairs), Some{ref}, er)
+  fs = Equal.sym(Bool, Openapi.seen(refs, ref), True{}, es)
+  %fr : {Openapi.deref.obj(_, doc, refs,
+    _u => Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)},
+    got => target => Openapi.deref(less, target, doc, got <> refs))
+    == Openapi.cyclic() : Value.Json}
+  %fs : {Openapi.deref.ref(_, ref, doc,
+    _u => Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)},
+    got => target => Openapi.deref(less, target, doc, got <> refs))
+    == Openapi.cyclic() : Value.Json}
+  {==}
+
+def Laws.oas_deref_plain(less, pairs, doc, refs, er):
+  fr = Equal.sym(Maybe<&2, String>, Openapi.ref.of(pairs), None{}, er)
+  %fr : {Openapi.deref.obj(_, doc, refs,
+    _u => Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)},
+    got => target => Openapi.deref(less, target, doc, got <> refs))
+    == Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)} : Value.Json}
+  {==}
+
+def Laws.oas_deref_follow(less, pairs, doc, refs, ref, target, er, es, et):
+  fr = Equal.sym(Maybe<&2, String>, Openapi.ref.of(pairs), Some{ref}, er)
+  fs = Equal.sym(Bool, Openapi.seen(refs, ref), False{}, es)
+  ft = Equal.sym(Maybe<&2, Value.Json>, Openapi.resolve(doc, ref), Some{target},
+    et)
+  %fr : {Openapi.deref.obj(_, doc, refs,
+    _u => Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)},
+    got => tg => Openapi.deref(less, tg, doc, got <> refs))
+    == Openapi.merge(Openapi.drop(Openapi.members(Value.JObj{Openapi.deref(1n+less,
+      pairs, doc, refs)}), "$ref"), Openapi.deref(less, target, doc, ref <> refs))
+    : Value.Json}
+  %fs : {Openapi.deref.ref(_, ref, doc,
+    _u => Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)},
+    got => tg => Openapi.deref(less, tg, doc, got <> refs))
+    == Openapi.merge(Openapi.drop(Openapi.members(Value.JObj{Openapi.deref(1n+less,
+      pairs, doc, refs)}), "$ref"), Openapi.deref(less, target, doc, ref <> refs))
+    : Value.Json}
+  %ft : {Openapi.deref.found(_,
+    _u => Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)},
+    tg => Openapi.deref(less, tg, doc, ref <> refs))
+    == Openapi.merge(Openapi.drop(Openapi.members(Value.JObj{Openapi.deref(1n+less,
+      pairs, doc, refs)}), "$ref"), Openapi.deref(less, target, doc, ref <> refs))
+    : Value.Json}
+  {==}
+
+def Laws.oas_deref_lost(less, pairs, doc, refs, ref, er, es, et):
+  fr = Equal.sym(Maybe<&2, String>, Openapi.ref.of(pairs), Some{ref}, er)
+  fs = Equal.sym(Bool, Openapi.seen(refs, ref), False{}, es)
+  ft = Equal.sym(Maybe<&2, Value.Json>, Openapi.resolve(doc, ref), None{}, et)
+  %fr : {Openapi.deref.obj(_, doc, refs,
+    _u => Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)},
+    got => tg => Openapi.deref(less, tg, doc, got <> refs))
+    == Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)} : Value.Json}
+  %fs : {Openapi.deref.ref(_, ref, doc,
+    _u => Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)},
+    got => tg => Openapi.deref(less, tg, doc, got <> refs))
+    == Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)} : Value.Json}
+  %ft : {Openapi.deref.found(_,
+    _u => Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)},
+    tg => Openapi.deref(less, tg, doc, ref <> refs))
+    == Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)} : Value.Json}
+  {==}
+
+def Laws.oas_call(_name, _description, _input, _method, _path, _params, _mt, _args):
+  {==}
+
+def Laws.oas_req_path(_name, _val, _path, _pairs, _hs):
+  {==}
+
+def Laws.oas_req_query(_name, _val, _path, _pairs, _hs):
+  {==}
+
+def Laws.oas_req_header(_name, _val, _path, _pairs, _hs):
+  {==}
+
+def Laws.oas_req_cookie(_name, _val, _path, _pairs, _hs):
+  {==}
+
+def Laws.oas_req_absent(_place, _name, _sofar):
+  {==}
+
+def Laws.oas_arg_absent(args, name, e):
+  f = Equal.sym(Bool, Json.has(args, name), False{}, e)
+  %f : {Openapi.arg.at(_, Json.get(args, name)) == None{} : Maybe<&2, Value.Json>}
+  {==}
+
+def Laws.oas_arg_null(args, name, eh, en):
+  fh = Equal.sym(Bool, Json.has(args, name), True{}, eh)
+  fn = Equal.sym(Value.Json, Json.get(args, name), Value.JNull{}, en)
+  %fh : {Openapi.arg.at(_, Json.get(args, name)) == None{} : Maybe<&2, Value.Json>}
+  %fn : {Openapi.arg.at(True{}, _) == None{} : Maybe<&2, Value.Json>}
+  {==}
+
+def Laws.oas_query_array(_name, _cs):
+  {==}
+
+def Laws.oas_query_null(_name, _rest):
+  {==}
+
+def Laws.oas_query_str(_name, _str):
+  {==}
+
+def Laws.oas_plain_num(_raw):
+  {==}
+
+def Laws.oas_unfilled(method, mt, body, path, pairs, hs, e):
+  f = Equal.sym(Bool, String.contains(path, "{"), True{}, e)
+  %f : {Openapi.call.send(_, method, mt, body, path, pairs, hs)
+    == Openapi.Unfilled{path} : Openapi.Call}
+  {==}
+
+def Laws.oas_send(method, mt, body, path, pairs, hs, e):
+  f = Equal.sym(Bool, String.contains(path, "{"), False{}, e)
+  %f : {Openapi.call.send(_, method, mt, body, path, pairs, hs)
+    == Openapi.Send{method, path ++ Openapi.query.text(pairs), List.append(&2,
+      Http.Header, Http.H{"Accept", "application/json"} <> hs, Openapi.ctype(mt,
+      body)), body} : Openapi.Call}
+  {==}
+
+def Laws.oas_query_text_none(pairs, e):
+  match pairs:
+    case []:
+      {==}
+    case one <> rest:
+      absurd(&2, {Openapi.query.text(one <> rest) == "" : String}, e)
+
+def Laws.oas_body_absent(_mt, _args):
+  {==}
+
+def Laws.oas_body_sent(_val):
+  {==}
+
+def Laws.oas_ctype_none(_mt):
+  {==}
+
+def Laws.oas_ctype_body(_mt, _body):
+  {==}
+
+def Laws.oas_check(_name, _description, _input, _method, _path, _params, _media, _args):
+  {==}
+
+def Laws.oas_check_ok(_name):
+  {==}
+
+def Laws.oas_check_why(_name, _why):
+  {==}
+
+def Laws.oas_missing_none(_args):
+  {==}
+
+def Laws.oas_missing_hit(name, rest, args, e):
+  f = Equal.sym(Bool, Json.has(args, name), False{}, e)
+  %f : {Openapi.missing.at(_, name, _u => Openapi.missing(rest, args))
+    == Some{name ++ ": Required"} : Maybe<&2, String>}
+  {==}
+
+def Laws.oas_typed_any(_val):
+  {==}
+
+def Laws.oas_kind_string(_str):
+  {==}
+
+def Laws.oas_kind_number_text(_raw):
   {==}

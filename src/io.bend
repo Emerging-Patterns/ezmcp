@@ -146,6 +146,62 @@ def http.serve_with(
     ~(c => req => http.answer(C, run, srv, path, origins, c, req)), ctx, host,
     port, max)
 
+# --- with the server in the context ---
+#
+# A server passed as `~srv` is a closed template too, so one built at run
+# time (from a document read at startup, say) rides in the context: `srv`
+# reads it from the context on every request
+
+# the endpoint's answer to one request ezhttp read, its server read from the
+# context
+def http.answer_from(
+  ~C: Data,
+  ~srv: C -> Server.Server,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  req: EzServer.Req
+) -> IO(EzServer.Answer):
+  IO.bind(Http.Reply, EzServer.Answer,
+    http.web(C, run, ctx, Web.decide(srv(ctx), path, origins,
+      EzServer.server.plain(req))),
+    EzServer.server.text)
+
+# serve `limit` connections, at most `max` at once (0: no limit), then stop
+def http.serve_from(
+  ~C: Data,
+  ~srv: C -> Server.Server,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  host: String,
+  port: U32,
+  limit: U32,
+  +max: U32
+) -> IO(Unit):
+  Ez.http.serve_io_with(~C,
+    ~(c => req => http.answer_from(C, srv, run, path, origins, c, req)), ctx,
+    host, port, limit, max)
+
+# serve until the process is stopped, at most `max` connections at once
+# (0: no limit)
+@unsafe def http.serve_forever_from(
+  ~C: Data,
+  ~srv: C -> Server.Server,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  host: String,
+  port: U32,
+  +max: U32
+) -> IO(Unit):
+  Ez.http.serve_forever_with(~C,
+    ~(c => req => http.answer_from(C, srv, run, path, origins, c, req)), ctx,
+    host, port, max)
+
 # --- with no context ---
 
 # one HTTP request to a server's endpoint at `path`
