@@ -10,6 +10,7 @@ import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
 import ../../main.bend as Mcp
 import ../../src/server.bend as Server
+import ../../src/rpc.bend as Rpc
 
 # the JSON Schema 2020-12 keywords the json-schema-2020-12 scenario looks
 # for in tools/list, passed through as given
@@ -80,8 +81,8 @@ def answer(+name: String) -> Value.Json:
     Mcp.result.error("This tool intentionally returns an error for testing"))))))
 
 # run a tool: ezmcp only runs tools the table names
-def run(name: String, _args: Value.Json) -> IO(Value.Json):
-  IO.pure(Value.Json, answer(name))
+def run(name: String, _args: Value.Json) -> IO(Rpc.Out):
+  IO.pure(Rpc.Out, Mcp.ok(answer(name)))
 
 # serve on the port the first argument names
 @unsafe def serve(args: List<String>) -> IO(Unit):

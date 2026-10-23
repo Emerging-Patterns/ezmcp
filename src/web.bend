@@ -43,8 +43,8 @@ def act(rev: String, lead: Server.Act) -> Web:
       Many{rev, acts}
 
 # the reply to a tool call, once it ran
-def ran(rev: String, id: Value.Json, result: Value.Json) -> Web:
-  json.reply(200, Server.ran(rev, id, result))
+def ran(rev: String, id: Value.Json, out: Rpc.Out) -> Web:
+  json.reply(200, Server.ran(rev, id, out))
 
 # the reply to a batch once its acts ran: 202 with no body when none had a
 # reply, else 200 with the array of the replies

@@ -508,8 +508,12 @@ def Laws.answer_id(id, s):
     case Server.Call{name, args}:
       {==}
 
-def Laws.ran_id(_rev, _id, _result):
-  {==}
+def Laws.ran_id(_rev, _id, out):
+  match out:
+    case Rpc.Ok{_result}:
+      {==}
+    case Rpc.Err{_c, _message}:
+      {==}
 
 def Laws.reply_ok_one(_id, _result):
   {==}
@@ -770,7 +774,10 @@ def Laws.web_post(srv, header, body, e):
 def Laws.web_send(_rev, _reply):
   {==}
 
-def Laws.web_ran(_rev, _id, _result):
+def Laws.web_ran(_rev, _id, _out):
+  {==}
+
+def Laws.ran_refused(_rev, _id, _c, _message):
   {==}
 
 def Laws.web_run(_rev, _id, _name, _args):

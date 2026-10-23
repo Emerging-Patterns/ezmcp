@@ -2,8 +2,8 @@
 # 2025-03-26, 2025-06-18 and 2025-11-25
 #
 # A server is a name, a version, instructions and a tool table; a runner
-# (String -> Json -> IO(Json)) runs a tool by name on its arguments and
-# answers a tool result. ezmcp serves it over streamable HTTP (on ezhttp)
+# (String -> Json -> IO(Rpc.Out)) runs a tool by name on its arguments and
+# answers `ok` of a tool result, or `refuse` with a JSON-RPC error. ezmcp serves it over streamable HTTP (on ezhttp)
 # or stdio, and answers initialize, ping, tools/list and tools/call itself.
 # The client side builds requests and reads replies over HTTP. This file is
 # the whole public interface; everything under src/ is internal, except the
@@ -56,15 +56,37 @@ def step(srv: Server.Server, rev: String, text: String) -> Server.Act:
 def turn(srv: Server.Server, rev: String, text: String) -> Server.Turn:
   Server.turn(srv, rev, text)
 
-# the reply to a tool call with this id, once the tool ran, under revision
-# `rev` (2025-03-26 leaves structuredContent out)
-def ran(rev: String, id: Value.Json, result: Value.Json) -> Value.Json:
-  Server.ran(rev, id, result)
+# the reply to a tool call with this id under revision `rev`, once the
+# runner answered (2025-03-26 leaves structuredContent out)
+def ran(rev: String, id: Value.Json, out: Rpc.Out) -> Value.Json:
+  Server.ran(rev, id, out)
 
 # what a batch sends back, from its acts' replies in order (None for an act
 # with none): nothing when none has one, else their array
 def batch.reply(replies: List<&2, Maybe<&2, Value.Json>>) -> Maybe<&2, Value.Json>:
   Server.batch.reply(replies)
+
+# --- what a runner answers ---
+
+# a runner's answer for a tool that ran: its tool result, which may itself
+# report a failure with `isError` (`result.error`)
+def ok(result: Value.Json) -> Rpc.Out:
+  Rpc.Ok{result}
+
+# a runner's answer for a call it refuses as a protocol error: a JSON-RPC
+# error with this code and message instead of a tool result
+# (server/tools#error-handling)
+def refuse(code: Rpc.Code, message: String) -> Rpc.Out:
+  Rpc.Err{code, message}
+
+# refuse with -32602 Invalid params, as for arguments that do not match the
+# tool's input schema
+def refuse.params(message: String) -> Rpc.Out:
+  Rpc.Err{Rpc.InvalidParams{}, message}
+
+# refuse with -32603 Internal error, as for a server that cannot run the tool
+def refuse.internal(message: String) -> Rpc.Out:
+  Rpc.Err{Rpc.InternalError{}, message}
 
 # --- tool results ---
 
@@ -105,7 +127,7 @@ def http.decide(
 # one request to the MCP endpoint at `path`, as an ezhttp IO handler, for a
 # server that serves other paths too
 def http.handle(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
   ~path: String,
   ~origins: List<&2, String>,
@@ -115,7 +137,7 @@ def http.handle(
 
 # serve the endpoint on host:port for `limit` connections, then stop
 def http.serve(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
   ~path: String,
   ~origins: List<&2, String>,
@@ -127,7 +149,7 @@ def http.serve(
 
 # serve the endpoint on host:port until the process is stopped
 @unsafe def http.serve_forever(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server,
   ~path: String,
   ~origins: List<&2, String>,
@@ -141,7 +163,7 @@ def http.serve(
 # serve newline-delimited JSON-RPC on stdin and stdout until stdin ends;
 # write logs with IO.print_err, never to stdout
 @unsafe def stdio.serve(
-  ~run: String -> Value.Json -> IO(Value.Json),
+  ~run: String -> Value.Json -> IO(Rpc.Out),
   ~srv: Server.Server
 ) -> IO(Unit):
   Io.stdio.serve(run, srv)
