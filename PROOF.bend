@@ -901,6 +901,9 @@ def Laws.line_message(srv, rev, text, e):
 def Laws.frame_line(_v):
   {==}
 
+def Laws.line_decoded(_srv, _rev, _bs):
+  {==}
+
 def Laws.request_id(_id, _m, _params):
   {==}
 
@@ -908,6 +911,9 @@ def Laws.notice_no_id(_m, _params):
   {==}
 
 def Laws.call_request(_id, _name, _args):
+  {==}
+
+def Laws.tools_request(_id):
   {==}
 
 def Laws.initialize_params(_id, _name, _version):
@@ -935,6 +941,9 @@ def Laws.headers_version(v, e):
   {==}
 
 def Laws.took_ok(_ctype, _text, _status):
+  {==}
+
+def Laws.took_status_200(_status, _ctype, _text):
   {==}
 
 def Laws.body_sse(_text):
@@ -1261,4 +1270,7 @@ def Laws.without_keeps_bind(src, num, v, r, key, e):
   f = Equal.sym(Bool, Value.span.eq(src, num, key), False{}, e)
   %f : {Server.without.bind(_, src, num, v, Server.without.go(r, key))
     == Value.JBind{src, num, v, Server.without.go(r, key)} : Value.Json}
+  {==}
+
+def Laws.version_named(_v):
   {==}

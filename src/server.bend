@@ -57,7 +57,7 @@ def oldest() -> String:
   "2025-03-26"
 
 # the revisions ezmcp speaks, oldest first
-def revisions() -> List<&2, String>:
+def revisions() -> List<&2, String>:  # noqa: L001 closed constant; supported_revisions states its members
   [oldest(), "2025-06-18", latest()]
 
 # whether ezmcp speaks a revision

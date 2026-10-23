@@ -34,29 +34,6 @@
 
       checks.${system} = {
         proofs = ez.mkProofs { ez = ezBin; src = self; };
-        # ENTRY.bend states the laws on main.bend, which reaches src/io.bend
-        # (ezhttp's socket effects and the @unsafe serve loops), so its verdict
-        # is SOME PROOFS FAIL; its only error may be the list of defs relying
-        # on unsafe or foreign code (2.0.38 prints it as `defs that depend on
-        # ...:` lines and a Hint).
-        entry = pkgs.runCommand "ezmcp-entry" {
-          nativeBuildInputs = [ bend ];
-          BEND_LIB = ez.bendLib ./ez.lock.toml;
-        } ''
-          export HOME=$TMPDIR
-          cp -r ${self} src && chmod -R u+w src && cd src
-          out_entry=$(bend ENTRY.bend 2>&1 || true)
-          echo "$out_entry" | head -n 2
-          [ "$(echo "$out_entry" | sed -n 1p)" = "SOME PROOFS FAIL" ] || exit 1
-          echo "$out_entry" | sed -n 2p \
-            | grep -Eq '^Error: [0-9]+ defs? rel(y|ies) on unsafe or foreign code:$' || exit 1
-          if echo "$out_entry" | tail -n +3 \
-            | grep -Ev '^defs that depend on (@unsafe|foreign effects): |^Hint: ' \
-            | grep -q .; then
-            echo "$out_entry"; exit 1
-          fi
-          touch $out
-        '';
         # examples/demo on the C lane, over stdio and over HTTP on loopback:
         # initialize, notifications/initialized, tools/list, tools/call (a
         # result, a tool error, an unknown tool, a runner's protocol error)

@@ -21,7 +21,7 @@ def initialize(id: Value.Json, name: String, version: String) -> Value.Json:
   Rpc.request(id, "initialize", init.params(name, version))
 
 # the notification a client sends once initialize succeeded
-def initialized() -> Value.Json:
+def initialized() -> Value.Json:  # noqa: L001 closed constant; notice_no_id holds for every notification
   Rpc.notice("notifications/initialized", Json.obj([]))
 
 # a tools/list request
@@ -68,7 +68,7 @@ def took(+status: U32, ctype: String, text: String) -> Rpc.Reply:
   took.ok(ctype, text, U32.is_eq(status, 200), status)
 
 # whether an HTTP reply to a notification accepted it: any 2xx
-def accepted(+status: U32) -> Bool:
+def accepted(+status: U32) -> Bool:  # noqa: L001 only src/io.bend calls it (MCP-TRUST-1)
   Bool.and(U32.is_ge(status, 200), U32.is_lt(status, 300))
 
 # the revision an initialize result names, "" when it names none

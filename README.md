@@ -207,9 +207,11 @@ completions, sampling, elicitation, roots, progress, cancellation, SSE
 streams on the server, sessions, pagination and authorization.
 
 `nix flake check` runs the proof gate (`bend PROOF.bend` must print exactly
-`ALL PROOFS CHECK` first), the entry check, a smoke run of the examples on
-the C lane, and bolt, whose `trace` rule checks that SPEC.md and the laws
-agree.
+`ALL PROOFS CHECK` first), a smoke run of the examples on the C lane, and
+bolt, whose `trace` rule checks that SPEC.md and the laws agree and whose
+`coverage` rule, an error, checks that a law reaches every def. A def no law
+can reach (a re-export in `main.bend`, a closed constant, a def only
+`src/io.bend` calls, an example's) carries a `# noqa: L001` naming why.
 
 ## License
 

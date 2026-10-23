@@ -30,13 +30,13 @@ def schema.add() -> Value.Json:
     ("required", Json.arr([Json.str("a"), Json.str("b")]))])
 
 # the demo server: two tools
-def srv() -> Server.Server:
+def srv() -> Server.Server:  # noqa: L001 example program, no law's subject
   Mcp.server("ezmcp-demo", "0.1.0", "Two small tools: echo and add.", [
     Mcp.tool("echo", "Answer the text back", schema.echo()),
     Mcp.tool("add", "Add two integers", schema.add())])
 
 # echo's answer: the prefix and the text, or a refusal
-def echo(prefix: String, meth: Maybe<&2, String>) -> Rpc.Out:
+def echo(prefix: String, meth: Maybe<&2, String>) -> Rpc.Out:  # noqa: L001 example program, no law's subject
   match meth:
     case None{}:
       Mcp.refuse.params("echo: text must be a string")
@@ -44,7 +44,7 @@ def echo(prefix: String, meth: Maybe<&2, String>) -> Rpc.Out:
       Mcp.ok(Mcp.result.text(prefix ++ s))
 
 # add's result: the sum as structured content, or a tool error
-def add(lead: Maybe<&2, U32>, byte: Maybe<&2, U32>) -> Value.Json:
+def add(lead: Maybe<&2, U32>, byte: Maybe<&2, U32>) -> Value.Json:  # noqa: L001 example program, no law's subject
   match lead byte:
     case Some{x} Some{y}:
       Mcp.result.json(Json.obj([("sum", Json.num(U32.show(U32.add(x, y))))]))
@@ -61,7 +61,7 @@ def run.of(prefix: String, +args: Value.Json, is_echo: Bool) -> IO(Rpc.Out):
 
 # ezmcp only runs tools the table names, so a name is echo or add; the
 # prefix is the context the server was started with
-def run(prefix: String, name: String, args: Value.Json) -> IO(Rpc.Out):
+def run(prefix: String, name: String, args: Value.Json) -> IO(Rpc.Out):  # noqa: L001 example program, no law's subject
   run.of(prefix, args, String.eq(name, "echo"))
 
 def http.limit(meth: Maybe<&1, String>) -> Maybe<&2, U32>:
@@ -72,7 +72,7 @@ def http.limit(meth: Maybe<&1, String>) -> Maybe<&2, U32>:
       U32.read(s)
 
 # serve HTTP for a number of connections, or forever
-@unsafe def http(+prefix: String, port: U32, limit: Maybe<&2, U32>) -> IO(Unit):
+@unsafe def http(+prefix: String, port: U32, limit: Maybe<&2, U32>) -> IO(Unit):  # noqa: L001 example program
   match limit:
     case None{}:
       Mcp.http.serve_forever_with(~String, ~run, ~srv(), ~"/mcp", ~[], prefix,
@@ -90,7 +90,7 @@ def http.prefix(rest: List<String>) -> String:
       ""
 
 # the mode the arguments name
-@unsafe def mode(args: List<String>) -> IO(Unit):
+@unsafe def mode(args: List<String>) -> IO(Unit):  # noqa: L001 example program, no law's subject
   match args:
     case _prog <> "stdio" <> []:
       Mcp.stdio.serve_with(~String, ~run, ~srv(), "")
@@ -102,5 +102,5 @@ def http.prefix(rest: List<String>) -> String:
     case other:
       IO.print_err("usage: demo stdio [PREFIX] | demo http PORT [N [PREFIX]]")
 
-@unsafe def main() -> IO(Unit):
+@unsafe def main() -> IO(Unit):  # noqa: L001 example program, no law's subject
   IO.bind(List<String>, Unit, IO.args(), mode)
