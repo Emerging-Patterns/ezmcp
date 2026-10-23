@@ -85,6 +85,26 @@ def run(_tool: String, args: Value.Json) -> IO(Rpc.Out):
   Mcp.http.serve_forever(~run, ~srv(), ~"/mcp", ~[], "127.0.0.1", 8000)
 ```
 
+### A runner with a context
+
+A runner passed as `~run` is a closed template: it can call top-level
+defs, but it cannot capture a value the program reads at run time, such as
+its arguments, an environment variable or a base URL. The `_with` serves
+take a context of any `Data` type and hand it to the runner on every call:
+
+```
+def run(base: String, tool: String, args: Value.Json) -> IO(Rpc.Out):
+  ...
+
+@unsafe def main() -> IO(Unit):
+  IO.bind(String, Unit, IO.try(String, IO.get_env("API_BASE")),
+    base => Mcp.http.serve_forever_with(~String, ~run, ~srv(), ~"/mcp", ~[],
+      base, "127.0.0.1", 8000))
+```
+
+`Mcp.stdio.serve_with(~C, ~run, ~srv, ctx)`, `Mcp.http.serve_with` (for
+`limit` connections) and `Mcp.http.handle_with` do the same.
+
 `Mcp.stdio.serve(~run, ~srv())` serves the same server on stdin and stdout
 instead; write logs with `IO.print_err`, never to stdout. To mount the
 endpoint in an ezhttp server that serves other paths too, hand requests to
@@ -108,6 +128,10 @@ endpoint in an ezhttp server that serves other paths too, hand requests to
 | `http.handle(~run, ~srv, ~path, ~origins, req)` | `IO(Http.Reply)` | one request, as an ezhttp IO handler |
 | `http.decide(srv, path, origins, req)` | `Web.Web` | the transport's decision for one request, with no IO |
 | `stdio.serve(~run, ~srv)` | `IO(Unit)` | serve stdin and stdout until stdin ends (`@unsafe`) |
+| `http.serve_forever_with(~C, ~run, ~srv, ~path, ~origins, ctx, host, port)` | `IO(Unit)` | `http.serve_forever` with a runner `C -> String -> Json -> IO(Rpc.Out)` given `ctx` (`@unsafe`) |
+| `http.serve_with(~C, ~run, ~srv, ~path, ~origins, ctx, host, port, limit)` | `IO(Unit)` | `http.serve` with a context |
+| `http.handle_with(~C, ~run, ~srv, ~path, ~origins, ctx, req)` | `IO(Http.Reply)` | `http.handle` with a context |
+| `stdio.serve_with(~C, ~run, ~srv, ctx)` | `IO(Unit)` | `stdio.serve` with a context (`@unsafe`) |
 | `step(srv, rev, text)` | `Server.Act` | what a server does with one message read by revision `rev`, for a transport of your own |
 | `turn(srv, rev, text)` | `Server.Turn` | `step`'s act and the revision a stream's next message is read by |
 | `ran(rev, id, out)` | `Json` | the reply to a tool call once the runner answered |

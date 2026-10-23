@@ -158,6 +158,63 @@ def http.serve(
 ) -> IO(Unit):
   Io.http.serve_forever(run, srv, path, origins, host, port)
 
+# --- with a context ---
+#
+# A runner passed as `~run` is a closed template, so it cannot capture a
+# value read at run time (arguments, environment, a base URL). These take a
+# context `ctx` of any Data type `C` and hand it to the runner on every
+# call: `run(ctx, name, args)`.
+
+# one request to the MCP endpoint at `path`, its runner given `ctx`
+def http.handle_with(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  req: Http.Request
+) -> IO(Http.Reply):
+  Io.http.handle_with(C, run, srv, path, origins, ctx, req)
+
+# serve the endpoint on host:port for `limit` connections, its runner given
+# `ctx`, then stop
+def http.serve_with(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  host: String,
+  port: U32,
+  limit: U32
+) -> IO(Unit):
+  Io.http.serve_with(C, run, srv, path, origins, ctx, host, port, limit)
+
+# serve the endpoint on host:port, its runner given `ctx`, until the process
+# is stopped
+@unsafe def http.serve_forever_with(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  host: String,
+  port: U32
+) -> IO(Unit):
+  Io.http.serve_forever_with(C, run, srv, path, origins, ctx, host, port)
+
+# serve stdin and stdout, its runner given `ctx`, until stdin ends
+@unsafe def stdio.serve_with(
+  ~C: Data,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~srv: Server.Server,
+  +ctx: C
+) -> IO(Unit):
+  Io.stdio.serve_with(C, run, srv, ctx)
+
 # --- stdio ---
 
 # serve newline-delimited JSON-RPC on stdin and stdout until stdin ends;

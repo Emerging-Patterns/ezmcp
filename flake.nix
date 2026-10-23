@@ -63,6 +63,8 @@
         # and a body that is not JSON,
         # under 2025-06-18; then a 2025-03-26 session (a batch, a tool result
         # with no structuredContent) and a revision ezmcp does not speak;
+        # then the context-carrying serves over both transports (examples/demo
+        # with a prefix), the HTTP one stopping after its connection limit;
         # then examples/client runs a session against it. A smoke run, not
         # evidence for any SPEC.md row.
         smoke = pkgs.runCommand "ezmcp-smoke" {
@@ -126,6 +128,19 @@
           [ "$(bare '[{"jsonrpc":"2.0","method":"notifications/initialized"}]')" = ' 202' ] || exit 1
           post "$add" 2025-11-25 | grep -qF '"structuredContent":{"sum":42}' || exit 1
           post "$add" 2026-07-28 | grep -q ' 400$' || exit 1
+          kill $demo
+          # the context-carrying serves hand the prefix to the runner
+          echo1='{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"echo","arguments":{"text":"hi"}}}'
+          printf '%s\n' "$echo1" | ./demo stdio '> ' | grep -qF '"text":"> hi"' || exit 1
+          ./demo http 18766 3 'H: ' &
+          ctxd=$!
+          for i in $(seq 50); do curl -s -o /dev/null http://127.0.0.1:18766/ && break; sleep 0.1; done
+          curl -s -H 'MCP-Protocol-Version: 2025-06-18' -d "$echo1" http://127.0.0.1:18766/mcp | grep -qF '"text":"H: hi"' || exit 1
+          [ "$(curl -s -o /dev/null -w '%{http_code}' -d '{oops' http://127.0.0.1:18766/mcp)" = 400 ] || exit 1
+          wait $ctxd
+          ./demo http 18765 100 &
+          demo=$!
+          for i in $(seq 50); do curl -s -o /dev/null http://127.0.0.1:18765/ && break; sleep 0.1; done
           cd ../client
           bend main.bend -o client
           ses=$(./client http://127.0.0.1:18765/mcp add '{"a":5,"b":6}')
