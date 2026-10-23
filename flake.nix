@@ -42,6 +42,8 @@
         # with no structuredContent) and a revision ezmcp does not speak;
         # then the context-carrying serves over both transports (examples/demo
         # with a prefix), the HTTP one stopping after its connection limit;
+        # then examples/openapi lists a document's tools, turns calls into
+        # requests and serves them with serve_from;
         # then examples/client runs a session against it. A smoke run, not
         # evidence for any SPEC.md row.
         smoke = pkgs.runCommand "ezmcp-smoke" {
@@ -118,6 +120,21 @@
           ./demo http 18765 100 &
           demo=$!
           for i in $(seq 50); do curl -s -o /dev/null http://127.0.0.1:18765/ && break; sleep 0.1; done
+          # examples/openapi: an OpenAPI document as a tool table, a call
+          # checked and turned into its request, served with serve_from
+          cd ../openapi
+          bend main.bend -o openapi
+          ./openapi list | grep -qF '{"name":"get_pet","description":"One pet","inputSchema":{"type":"object","properties":{"pet_id":{"type":"number"}' || exit 1
+          ./openapi list | grep -qF '"name":{"type":["string","null"]},"age":{"type":"number"}},"required":["name"],"description":"The JSON request body."}' || exit 1
+          ./openapi list | grep -qF '{"name":"PostPets","description":"Executes POST /pets"' || exit 1
+          ./openapi call get_pet '{"pet_id":7,"fields":["a b","c"],"X-Trace":"t1"}' | grep -qF '"text":"GET /pets/7?fields=a+b&fields=c\nAccept: application/json\nx-trace: t1"' || exit 1
+          ./openapi call pets_update '{"pet_id":5,"requestBody":{"name":"Rex"}}' | grep -qF '"text":"PUT /pets/5\nAccept: application/json\nContent-Type: application/json\n\n{\"name\":\"Rex\"}"' || exit 1
+          ./openapi call get_pet '{}' | grep -qF '"error":{"code":-32602,"message":"Invalid arguments for tool '"'"'get_pet'"'"': pet_id: Required"}' || exit 1
+          ./openapi http 18767 2 &
+          oa=$!
+          for i in $(seq 50); do curl -s -o /dev/null http://127.0.0.1:18767/ && break; sleep 0.1; done
+          curl -s -H 'MCP-Protocol-Version: 2025-06-18' -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_pet","arguments":{"pet_id":1}}}' http://127.0.0.1:18767/mcp | grep -qF '"text":"GET /pets/1\nAccept: application/json"' || exit 1
+          wait $oa
           cd ../client
           bend main.bend -o client
           ses=$(./client http://127.0.0.1:18765/mcp add '{"a":5,"b":6}')

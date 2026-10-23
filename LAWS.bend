@@ -7,12 +7,14 @@ import Base
 import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
 import 0xedb2120a04a47dc18c3a756ec7c62750/src/http.bend as Http
+import 0xedb2120a04a47dc18c3a756ec7c62750/src/qs.bend as Qs
 import ./src/rpc.bend as Rpc
 import ./src/server.bend as Server
 import ./src/web.bend as Web
 import ./src/line.bend as Line
 import ./src/sse.bend as Sse
 import ./src/client.bend as Client
+import ./src/openapi.bend as Openapi
 
 # --- the specification's own words ---
 
@@ -1534,3 +1536,891 @@ law version_named:
   for v: String
   {Client.version(Json.obj([("protocolVersion", Json.str(v))])) == v
     : String}
+
+# --- OpenAPI (MCP-OAS) ---
+
+# LAW: a document's operations are those of its paths' Path Items, in order
+# MCP-OAS-1
+law oas_ops:
+  for +doc: Value.Json
+  {Openapi.ops(doc) == Openapi.paths(Openapi.members(Json.get(doc, "paths")),
+    doc) : List<&2, Openapi.Op>}
+
+# LAW: a path's operations come first, then the other paths', each path's
+# for the methods in order, after its parameters with references followed
+# MCP-OAS-1
+law oas_paths:
+  for +path: String
+  for +it: Value.Json
+  for rest: List<&2, Openapi.Mem()>
+  for +doc: Value.Json
+  {Openapi.paths((path, it) <> rest, doc)
+    == List.append(&2, Openapi.Op, Openapi.item(Openapi.methods(), doc, path,
+      it, Json.items(Openapi.dereferenced(doc, Json.get(it, "parameters")))),
+      Openapi.paths(rest, doc)) : List<&2, Openapi.Op>}
+
+# LAW: the methods are get, put, post, delete, options, head, patch and
+# trace, in that order
+# MCP-OAS-1
+law oas_methods:
+  for +doc: Value.Json
+  for +path: String
+  for +it: Value.Json
+  for +ips: List<&2, Value.Json>
+  {Openapi.item(Openapi.methods(), doc, path, it, ips)
+    == Openapi.item(["get", "put", "post", "delete", "options", "head",
+      "patch", "trace"], doc, path, it, ips) : List<&2, Openapi.Op>}
+
+# LAW: a method whose member is an object is an operation, before the rest
+# MCP-OAS-1
+law oas_item_take:
+  for +method: String
+  for ms: List<&2, String>
+  for +doc: Value.Json
+  for +path: String
+  for +it: Value.Json
+  for +ips: List<&2, Value.Json>
+  for e: {Json.is_obj(Json.get(it, method)) == True{} : Bool}
+  {Openapi.item(method <> ms, doc, path, it, ips)
+    == Openapi.op(doc, path, method, ips, Json.get(it, method))
+      <> Openapi.item(ms, doc, path, it, ips) : List<&2, Openapi.Op>}
+
+# LAW: any other method is no operation
+# MCP-OAS-1
+law oas_item_skip:
+  for +method: String
+  for ms: List<&2, String>
+  for +doc: Value.Json
+  for +path: String
+  for +it: Value.Json
+  for +ips: List<&2, Value.Json>
+  for e: {Json.is_obj(Json.get(it, method)) == False{} : Bool}
+  {Openapi.item(method <> ms, doc, path, it, ips)
+    == Openapi.item(ms, doc, path, it, ips) : List<&2, Openapi.Op>}
+
+# LAW: an object's members are the members it was made of, in order
+# MCP-OAS-1
+law oas_members:
+  for ps: List<&2, Openapi.Mem()>
+  {Openapi.members(Openapi.object(ps)) == ps : List<&2, Openapi.Mem()>}
+
+# LAW: a non-empty operationId is the name, sanitized
+# MCP-OAS-2
+law oas_name_id:
+  for +id: String
+  for method: String
+  for path: String
+  for e: {String.is_empty(id) == False{} : Bool}
+  {Openapi.name.of(Some{id}, method, path) == Openapi.sanitize(id) : String}
+
+# LAW: with no operationId the name is made from the method and path
+# MCP-OAS-2
+law oas_name_none:
+  for +method: String
+  for +path: String
+  {Openapi.name.of(None{}, method, path)
+    == Openapi.sanitize(Openapi.generated(method, path)) : String}
+
+# LAW: a character that may stand in a tool name is kept
+# MCP-OAS-2
+law oas_sanitize_keep:
+  for +cp: U32
+  for rest: String
+  for e: {Openapi.name.ok(cp) == True{} : Bool}
+  {Openapi.sanitize(SCon{Chr{cp}, rest}) == SCon{Chr{cp}, Openapi.sanitize(rest)}
+    : String}
+
+# LAW: any other is written as `_`
+# MCP-OAS-2
+law oas_sanitize_swap:
+  for +cp: U32
+  for rest: String
+  for e: {Openapi.name.ok(cp) == False{} : Bool}
+  {Openapi.sanitize(SCon{Chr{cp}, rest}) == SCon{'_', Openapi.sanitize(rest)}
+    : String}
+
+# LAW: a sanitized name has the length it had
+# MCP-OAS-2
+law oas_sanitize_length:
+  for +text: String
+  {String.length(Openapi.sanitize(text)) == String.length(text) : Nat}
+
+# LAW: an operation's tool is its name, description and input schema
+# MCP-OAS-2
+law oas_tool:
+  for name: String
+  for description: String
+  for input: Value.Json
+  for method: String
+  for path: String
+  for params: List<&2, Openapi.Param>
+  for media: String
+  {Openapi.tool(Openapi.Op{name, description, input, method, path, params,
+    media}) == Server.Tool{name, description, input} : Server.Tool}
+
+# LAW: an operation's name is its tool's
+# MCP-OAS-2
+law oas_name:
+  for name: String
+  for description: String
+  for input: Value.Json
+  for method: String
+  for path: String
+  for params: List<&2, Openapi.Param>
+  for media: String
+  {Openapi.name(Openapi.Op{name, description, input, method, path, params,
+    media}) == name : String}
+
+# LAW: a renamed operation has the new name and all else it had
+# MCP-OAS-2
+law oas_renamed:
+  for name: String
+  for description: String
+  for input: Value.Json
+  for method: String
+  for path: String
+  for params: List<&2, Openapi.Param>
+  for media: String
+  for to: String
+  {Openapi.renamed(Openapi.Op{name, description, input, method, path, params,
+    media}, to) == Openapi.Op{to, description, input, method, path, params,
+    media} : Openapi.Op}
+
+# LAW: a non-empty description is the tool's
+# MCP-OAS-3
+law oas_describe_desc:
+  for +desc: String
+  for summary: Maybe<&2, String>
+  for +method: String
+  for path: String
+  for e: {String.is_empty(desc) == False{} : Bool}
+  {Openapi.describe(Some{desc}, summary, method, path) == desc : String}
+
+# LAW: else a non-empty summary is
+# MCP-OAS-3
+law oas_describe_summary:
+  for +summary: String
+  for +method: String
+  for path: String
+  for e: {String.is_empty(summary) == False{} : Bool}
+  {Openapi.describe(None{}, Some{summary}, method, path) == summary : String}
+
+# LAW: else the method and path it runs are
+# MCP-OAS-3
+law oas_describe_none:
+  for +method: String
+  for path: String
+  {Openapi.describe(None{}, None{}, method, path)
+    == "Executes " ++ String.to_upper(method) ++ " " ++ path : String}
+
+# LAW: an operation with no parameters of its own has its Path Item's
+# MCP-OAS-4
+law oas_merge_none:
+  for ps: List<&2, Value.Json>
+  {Openapi.params.merge([], ps) == ps : List<&2, Value.Json>}
+
+# LAW: each of an operation's parameters is put in turn
+# MCP-OAS-4
+law oas_merge_one:
+  for one: Value.Json
+  for rest: List<&2, Value.Json>
+  for ps: List<&2, Value.Json>
+  {Openapi.params.merge(one <> rest, ps)
+    == Openapi.params.merge(rest, Openapi.params.put(ps, one))
+    : List<&2, Value.Json>}
+
+# LAW: a parameter none is the same as goes last
+# MCP-OAS-4
+law oas_put_param_last:
+  for new: Value.Json
+  {Openapi.params.put([], new) == [new] : List<&2, Value.Json>}
+
+# LAW: a parameter takes the place of the first that is the same
+# MCP-OAS-4
+law oas_put_param_same:
+  for +old: Value.Json
+  for rest: List<&2, Value.Json>
+  for +new: Value.Json
+  for e: {Openapi.same(old, new) == True{} : Bool}
+  {Openapi.params.put(old <> rest, new) == new <> rest : List<&2, Value.Json>}
+
+# LAW: and passes one that is not
+# MCP-OAS-4
+law oas_put_param_other:
+  for +old: Value.Json
+  for +rest: List<&2, Value.Json>
+  for +new: Value.Json
+  for e: {Openapi.same(old, new) == False{} : Bool}
+  {Openapi.params.put(old <> rest, new) == old <> Openapi.params.put(rest, new)
+    : List<&2, Value.Json>}
+
+# LAW: two parameters are the same when their names and locations are
+# MCP-OAS-4
+law oas_same:
+  for +left: Value.Json
+  for +right: Value.Json
+  {Openapi.same(left, right)
+    == Bool.and(String.eq(Openapi.str.at(left, "name"),
+      Openapi.str.at(right, "name")), String.eq(Openapi.str.at(left, "in"),
+      Openapi.str.at(right, "in"))) : Bool}
+
+# LAW: a named parameter with a schema is the property of its name
+# MCP-OAS-5
+law oas_param_put:
+  for +name: String
+  for +one: Value.Json
+  for props: List<&2, Openapi.Mem()>
+  for req: List<&2, String>
+  {Openapi.input.param.of(Some{name}, True{}, one, Openapi.In{props, req})
+    == Openapi.In{Openapi.put(props, name, Openapi.described(Openapi.schema(
+      Json.get(one, "schema")), Openapi.full(Json.as_str(Json.get(one,
+      "description"))))), Openapi.need(req, name, Openapi.is_true(Json.get(one,
+      "required")))} : Openapi.In}
+
+# LAW: a parameter with no name adds nothing
+# MCP-OAS-5
+law oas_param_unnamed:
+  for ok: Bool
+  for one: Value.Json
+  for st: Openapi.In
+  {Openapi.input.param.of(None{}, ok, one, st) == st : Openapi.In}
+
+# LAW: nor does one with no schema
+# MCP-OAS-5
+law oas_param_unschemed:
+  for name: Maybe<&2, String>
+  for one: Value.Json
+  for st: Openapi.In
+  {Openapi.input.param.of(name, False{}, one, st) == st : Openapi.In}
+
+# LAW: a required name is added last
+# MCP-OAS-5
+law oas_need:
+  for req: List<&2, String>
+  for name: String
+  {Openapi.need(req, name, True{}) == List.append(&2, String, req, [name])
+    : List<&2, String>}
+
+# LAW: any other is not
+# MCP-OAS-5
+law oas_need_not:
+  for req: List<&2, String>
+  for name: String
+  {Openapi.need(req, name, False{}) == req : List<&2, String>}
+
+# LAW: a member none has goes last
+# MCP-OAS-5
+law oas_put_last:
+  for key: String
+  for val: Value.Json
+  {Openapi.put([], key, val) == [(key, val)] : List<&2, Openapi.Mem()>}
+
+# LAW: a member takes the place of the first of its name
+# MCP-OAS-5
+law oas_put_hit:
+  for +k2: String
+  for v2: Value.Json
+  for rest: List<&2, Openapi.Mem()>
+  for +key: String
+  for +val: Value.Json
+  for e: {String.eq(k2, key) == True{} : Bool}
+  {Openapi.put((k2, v2) <> rest, key, val) == (key, val) <> rest
+    : List<&2, Openapi.Mem()>}
+
+# LAW: and passes one of another name
+# MCP-OAS-5
+law oas_put_miss:
+  for +k2: String
+  for v2: Value.Json
+  for +rest: List<&2, Openapi.Mem()>
+  for +key: String
+  for +val: Value.Json
+  for e: {String.eq(k2, key) == False{} : Bool}
+  {Openapi.put((k2, v2) <> rest, key, val) == (k2, v2) <> Openapi.put(rest,
+    key, val) : List<&2, Openapi.Mem()>}
+
+# LAW: an object schema takes the description
+# MCP-OAS-5
+law oas_described:
+  for +cs: Value.Json
+  for desc: String
+  {Openapi.described(Value.JObj{cs}, Some{desc})
+    == Openapi.object(Openapi.put(Openapi.members(Value.JObj{cs}),
+      "description", Json.str(desc))) : Value.Json}
+
+# LAW: no description leaves a schema as it is
+# MCP-OAS-5
+law oas_described_none:
+  for val: Value.Json
+  {Openapi.described(val, None{}) == val : Value.Json}
+
+# LAW: a body with a schema for application/json is sent as JSON
+# MCP-OAS-6
+law oas_media_json:
+  for +content: Value.Json
+  for e: {Openapi.schema.ok(Json.get(Json.get(content, "application/json"),
+    "schema")) == True{} : Bool}
+  {Openapi.media(content) == "application/json" : String}
+
+# LAW: else as its first media type
+# MCP-OAS-6
+law oas_media_other:
+  for +content: Value.Json
+  for e: {Openapi.schema.ok(Json.get(Json.get(content, "application/json"),
+    "schema")) == False{} : Bool}
+  {Openapi.media(content) == Openapi.media.first(Openapi.members(content))
+    : String}
+
+# LAW: a body with no media type adds nothing
+# MCP-OAS-6
+law oas_body_none:
+  for rb: Value.Json
+  for st: Openapi.In
+  {Openapi.input.body(rb, "", st) == st : Openapi.In}
+
+# LAW: a JSON body is its schema, described, required when the body is
+# MCP-OAS-6
+law oas_body_json:
+  for +rb: Value.Json
+  for props: List<&2, Openapi.Mem()>
+  for req: List<&2, String>
+  {Openapi.input.body(rb, "application/json", Openapi.In{props, req})
+    == Openapi.In{Openapi.put(props, "requestBody", Openapi.body.json(rb)),
+      Openapi.need(req, "requestBody", Openapi.is_true(Json.get(rb,
+      "required")))} : Openapi.In}
+
+# LAW: any other body is a string
+# MCP-OAS-6
+law oas_body_text:
+  for +rb: Value.Json
+  for +mt: String
+  for props: List<&2, Openapi.Mem()>
+  for req: List<&2, String>
+  for none: {String.is_empty(mt) == False{} : Bool}
+  for json: {String.eq(mt, "application/json") == False{} : Bool}
+  {Openapi.input.body(rb, mt, Openapi.In{props, req})
+    == Openapi.In{Openapi.put(props, "requestBody", Openapi.body.text(rb, mt)),
+      Openapi.need(req, "requestBody", Openapi.is_true(Json.get(rb,
+      "required")))} : Openapi.In}
+
+# LAW: the input schema is an object schema of the properties
+# MCP-OAS-6
+law oas_input:
+  for props: List<&2, Openapi.Mem()>
+  for req: List<&2, String>
+  {Openapi.input.of(Openapi.In{props, req})
+    == Openapi.object(List.append(&2, Openapi.Mem(), [("type", Json.str(
+      "object")), ("properties", Openapi.object(props))], Openapi.required(req)))
+    : Value.Json}
+
+# LAW: with no required name there is no `required`
+# MCP-OAS-6
+law oas_required_none:
+  for req: List<&2, String>
+  for e: {List.is_empty(&2, String, req) == True{} : Bool}
+  {Openapi.required(req) == [] : List<&2, Openapi.Mem()>}
+
+# LAW: else `required` lists them
+# MCP-OAS-6
+law oas_required_some:
+  for one: String
+  for rest: List<&2, String>
+  {Openapi.required(one <> rest)
+    == [("required", Json.arr(Openapi.strs(one <> rest)))]
+    : List<&2, Openapi.Mem()>}
+
+# LAW: integer is number
+# MCP-OAS-7
+law oas_number:
+  for +typ: Value.Json
+  for e: {Openapi.is_str(typ, "integer") == True{} : Bool}
+  {Openapi.number(typ) == Json.str("number") : Value.Json}
+
+# LAW: any other type is as it is
+# MCP-OAS-7
+law oas_number_other:
+  for +typ: Value.Json
+  for e: {Openapi.is_str(typ, "integer") == False{} : Bool}
+  {Openapi.number(typ) == typ : Value.Json}
+
+# LAW: dropping from no members leaves none
+# MCP-OAS-7
+law oas_drop_last:
+  for key: String
+  {Openapi.drop([], key) == [] : List<&2, Openapi.Mem()>}
+
+# LAW: a member of the name is left out
+# MCP-OAS-7
+law oas_drop_hit:
+  for +k2: String
+  for v2: Value.Json
+  for rest: List<&2, Openapi.Mem()>
+  for +key: String
+  for e: {String.eq(k2, key) == True{} : Bool}
+  {Openapi.drop((k2, v2) <> rest, key) == Openapi.drop(rest, key)
+    : List<&2, Openapi.Mem()>}
+
+# LAW: and any other kept, in order
+# MCP-OAS-7
+law oas_drop_miss:
+  for +k2: String
+  for v2: Value.Json
+  for rest: List<&2, Openapi.Mem()>
+  for +key: String
+  for e: {String.eq(k2, key) == False{} : Bool}
+  {Openapi.drop((k2, v2) <> rest, key) == (k2, v2) <> Openapi.drop(rest, key)
+    : List<&2, Openapi.Mem()>}
+
+# LAW: a schema with no type keeps its members
+# MCP-OAS-7
+law oas_typed_none:
+  for ps: List<&2, Openapi.Mem()>
+  for nullable: Bool
+  {Openapi.typed.of(ps, None{}, nullable) == ps : List<&2, Openapi.Mem()>}
+
+# LAW: a type is mapped in its place
+# MCP-OAS-7
+law oas_typed:
+  for ps: List<&2, Openapi.Mem()>
+  for +typ: Value.Json
+  {Openapi.typed.of(ps, Some{typ}, False{})
+    == Openapi.put(ps, "type", Openapi.number(typ)) : List<&2, Openapi.Mem()>}
+
+# LAW: and admits null when nullable
+# MCP-OAS-7
+law oas_typed_null:
+  for ps: List<&2, Openapi.Mem()>
+  for +typ: Value.Json
+  {Openapi.typed.of(ps, Some{typ}, True{})
+    == Openapi.put(ps, "type", Openapi.with.null(Openapi.number(typ)))
+    : List<&2, Openapi.Mem()>}
+
+# LAW: a type name admitting null is it and "null"
+# MCP-OAS-7
+law oas_null_name:
+  for +name: String
+  {Openapi.with.null(Value.JStr{name})
+    == Json.arr([Value.JStr{name}, Json.str("null")]) : Value.Json}
+
+# LAW: an object schema recurses into its properties
+# MCP-OAS-7
+law oas_kids_object:
+  for +ps: List<&2, Openapi.Mem()>
+  for e: {Openapi.is_str(Openapi.value(ps, "type"), "object") == True{} : Bool}
+  {Openapi.kids(ps) == Openapi.kids.props(Openapi.value(ps, "properties"))
+    : Openapi.Kids}
+
+# LAW: an array schema into its items
+# MCP-OAS-7
+law oas_kids_array:
+  for +ps: List<&2, Openapi.Mem()>
+  for eo: {Openapi.is_str(Openapi.value(ps, "type"), "object") == False{} : Bool}
+  for ea: {Openapi.is_str(Openapi.value(ps, "type"), "array") == True{} : Bool}
+  {Openapi.kids(ps) == Openapi.kids.item(Openapi.value(ps, "items"))
+    : Openapi.Kids}
+
+# LAW: any other into nothing
+# MCP-OAS-7
+law oas_kids_none:
+  for +ps: List<&2, Openapi.Mem()>
+  for eo: {Openapi.is_str(Openapi.value(ps, "type"), "object") == False{} : Bool}
+  for ea: {Openapi.is_str(Openapi.value(ps, "type"), "array") == False{} : Bool}
+  {Openapi.kids(ps) == Openapi.NoKids{} : Openapi.Kids}
+
+# LAW: a property's object schema is mapped
+# MCP-OAS-7
+law oas_prop_map:
+  for cs: Value.Json
+  {Openapi.prop.of(Value.JObj{cs}) == Openapi.PMap{} : Openapi.Prop}
+
+# LAW: a boolean schema is kept
+# MCP-OAS-7
+law oas_prop_keep:
+  for flag: Bool
+  {Openapi.prop.of(Value.JBool{flag}) == Openapi.PKeep{} : Openapi.Prop}
+
+# LAW: `~1` is `/`
+# MCP-OAS-8
+law oas_token_slash:
+  for rest: String
+  {Openapi.token(SCon{'~', SCon{'1', rest}}) == SCon{'/', Openapi.token(rest)}
+    : String}
+
+# LAW: `~0` is `~`
+# MCP-OAS-8
+law oas_token_tilde:
+  for rest: String
+  {Openapi.token(SCon{'~', SCon{'0', rest}}) == SCon{'~', Openapi.token(rest)}
+    : String}
+
+# LAW: a local reference is walked from the document
+# MCP-OAS-8
+law oas_resolve_local:
+  for +doc: Value.Json
+  for +ref: String
+  for e: {String.starts_with(ref, "#/") == True{} : Bool}
+  {Openapi.resolve(doc, ref)
+    == Openapi.walk(String.split(String.drop(ref, 2n), '/'), doc)
+    : Maybe<&2, Value.Json>}
+
+# LAW: any other resolves to nothing
+# MCP-OAS-8
+law oas_resolve_other:
+  for +doc: Value.Json
+  for +ref: String
+  for e: {String.starts_with(ref, "#/") == False{} : Bool}
+  {Openapi.resolve(doc, ref) == None{} : Maybe<&2, Value.Json>}
+
+# LAW: a walk with no tokens left is where it is
+# MCP-OAS-8
+law oas_walk_done:
+  for +val: Value.Json
+  {Openapi.walk([], val) == Some{val} : Maybe<&2, Value.Json>}
+
+# LAW: a token the value has no member of resolves to nothing
+# MCP-OAS-8
+law oas_walk_miss:
+  for +tok: String
+  for rest: List<&2, String>
+  for +val: Value.Json
+  for e: {Json.has(val, Openapi.token(tok)) == False{} : Bool}
+  {Openapi.walk(tok <> rest, val) == None{} : Maybe<&2, Value.Json>}
+
+# LAW: a reference with no other members is its target
+# MCP-OAS-8
+law oas_merge_bare:
+  for +target: Value.Json
+  {Openapi.merge([], target) == target : Value.Json}
+
+# LAW: else its members come first, then the target's
+# MCP-OAS-8
+law oas_merge_sib:
+  for +one: Openapi.Mem()
+  for +rest: List<&2, Openapi.Mem()>
+  for +target: Value.Json
+  {Openapi.merge(one <> rest, target)
+    == Openapi.object(Openapi.merge.add(Openapi.members(target), one <> rest))
+    : Value.Json}
+
+# LAW: a target member they name is left out
+# MCP-OAS-8
+law oas_merge_add_hit:
+  for +key: String
+  for val: Value.Json
+  for rest: List<&2, Openapi.Mem()>
+  for +sib: List<&2, Openapi.Mem()>
+  for e: {Openapi.named(sib, key) == True{} : Bool}
+  {Openapi.merge.add((key, val) <> rest, sib) == Openapi.merge.add(rest, sib)
+    : List<&2, Openapi.Mem()>}
+
+# LAW: any other is added after them
+# MCP-OAS-8
+law oas_merge_add_miss:
+  for +key: String
+  for val: Value.Json
+  for rest: List<&2, Openapi.Mem()>
+  for +sib: List<&2, Openapi.Mem()>
+  for e: {Openapi.named(sib, key) == False{} : Bool}
+  {Openapi.merge.add((key, val) <> rest, sib)
+    == Openapi.merge.add(rest, List.append(&2, Openapi.Mem(), sib, [(key, val)]))
+    : List<&2, Openapi.Mem()>}
+
+# LAW: a reference to one being followed is a cycle
+# MCP-OAS-8
+law oas_deref_cycle:
+  for +less: Nat
+  for +pairs: Value.Json
+  for +doc: Value.Json
+  for +refs: List<&2, String>
+  for +ref: String
+  for er: {Openapi.ref.of(pairs) == Some{ref} : Maybe<&2, String>}
+  for es: {Openapi.seen(refs, ref) == True{} : Bool}
+  {Openapi.deref(1n+less, Value.JObj{pairs}, doc, refs) == Openapi.cyclic()
+    : Value.Json}
+
+# LAW: an object with no reference has its values followed
+# MCP-OAS-8
+law oas_deref_plain:
+  for +less: Nat
+  for +pairs: Value.Json
+  for +doc: Value.Json
+  for +refs: List<&2, String>
+  for er: {Openapi.ref.of(pairs) == None{} : Maybe<&2, String>}
+  {Openapi.deref(1n+less, Value.JObj{pairs}, doc, refs)
+    == Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)} : Value.Json}
+
+# LAW: a reference that resolves is its target, followed, merged
+# MCP-OAS-8
+law oas_deref_follow:
+  for +less: Nat
+  for +pairs: Value.Json
+  for +doc: Value.Json
+  for +refs: List<&2, String>
+  for +ref: String
+  for +target: Value.Json
+  for er: {Openapi.ref.of(pairs) == Some{ref} : Maybe<&2, String>}
+  for es: {Openapi.seen(refs, ref) == False{} : Bool}
+  for et: {Openapi.resolve(doc, ref) == Some{target} : Maybe<&2, Value.Json>}
+  {Openapi.deref(1n+less, Value.JObj{pairs}, doc, refs)
+    == Openapi.merge(Openapi.drop(Openapi.members(Value.JObj{Openapi.deref(1n+less,
+      pairs, doc, refs)}), "$ref"), Openapi.deref(less, target, doc, ref <> refs))
+    : Value.Json}
+
+# LAW: one that does not is left as it is
+# MCP-OAS-8
+law oas_deref_lost:
+  for +less: Nat
+  for +pairs: Value.Json
+  for +doc: Value.Json
+  for +refs: List<&2, String>
+  for +ref: String
+  for er: {Openapi.ref.of(pairs) == Some{ref} : Maybe<&2, String>}
+  for es: {Openapi.seen(refs, ref) == False{} : Bool}
+  for et: {Openapi.resolve(doc, ref) == None{} : Maybe<&2, Value.Json>}
+  {Openapi.deref(1n+less, Value.JObj{pairs}, doc, refs)
+    == Value.JObj{Openapi.deref(1n+less, pairs, doc, refs)} : Value.Json}
+
+# LAW: a call is its parameters put in the request, and its body
+# MCP-OAS-9
+law oas_call:
+  for name: String
+  for description: String
+  for input: Value.Json
+  for method: String
+  for +path: String
+  for params: List<&2, Openapi.Param>
+  for +mt: String
+  for +args: Value.Json
+  {Openapi.call(Openapi.Op{name, description, input, method, path, params, mt},
+    args) == Openapi.call.of(method, mt, Openapi.body.arg(String.is_empty(mt),
+    mt, args), Openapi.req.params(params, args, Openapi.Req{path, [], []}))
+    : Openapi.Call}
+
+# LAW: a path parameter is filled into the path
+# MCP-OAS-9
+law oas_req_path:
+  for +name: String
+  for val: Value.Json
+  for path: String
+  for pairs: List<&2, Qs.Kv()>
+  for hs: List<&2, Http.Header>
+  {Openapi.req.put(Openapi.InPath{}, name, val, Openapi.Req{path, pairs, hs})
+    == Openapi.Req{Openapi.fill(path, name, val), pairs, hs} : Openapi.Req}
+
+# LAW: a query parameter's pairs are added to the query
+# MCP-OAS-9
+law oas_req_query:
+  for +name: String
+  for val: Value.Json
+  for path: String
+  for pairs: List<&2, Qs.Kv()>
+  for hs: List<&2, Http.Header>
+  {Openapi.req.put(Openapi.InQuery{}, name, val, Openapi.Req{path, pairs, hs})
+    == Openapi.Req{path, List.append(&2, Qs.Kv(), pairs, Openapi.query(name,
+      val)), hs} : Openapi.Req}
+
+# LAW: a header parameter is a header field of its name in lower case
+# MCP-OAS-9
+law oas_req_header:
+  for +name: String
+  for val: Value.Json
+  for path: String
+  for pairs: List<&2, Qs.Kv()>
+  for hs: List<&2, Http.Header>
+  {Openapi.req.put(Openapi.InHeader{}, name, val, Openapi.Req{path, pairs, hs})
+    == Openapi.Req{path, pairs, List.append(&2, Http.Header, hs,
+      [Http.H{String.to_lower(name), Openapi.plain(val)}])} : Openapi.Req}
+
+# LAW: a cookie parameter changes nothing
+# MCP-OAS-9
+law oas_req_cookie:
+  for +name: String
+  for val: Value.Json
+  for path: String
+  for pairs: List<&2, Qs.Kv()>
+  for hs: List<&2, Http.Header>
+  {Openapi.req.put(Openapi.InCookie{}, name, val, Openapi.Req{path, pairs, hs})
+    == Openapi.Req{path, pairs, hs} : Openapi.Req}
+
+# LAW: nor does a parameter with no argument
+# MCP-OAS-9
+law oas_req_absent:
+  for place: Openapi.Place
+  for +name: String
+  for sofar: Openapi.Req
+  {Openapi.req.arg(None{}, place, name, sofar) == sofar : Openapi.Req}
+
+# LAW: an argument that is not there is none
+# MCP-OAS-9
+law oas_arg_absent:
+  for +args: Value.Json
+  for +name: String
+  for e: {Json.has(args, name) == False{} : Bool}
+  {Openapi.arg(args, name) == None{} : Maybe<&2, Value.Json>}
+
+# LAW: nor is a null one
+# MCP-OAS-9
+law oas_arg_null:
+  for +args: Value.Json
+  for +name: String
+  for eh: {Json.has(args, name) == True{} : Bool}
+  for en: {Json.get(args, name) == Value.JNull{} : Value.Json}
+  {Openapi.arg(args, name) == None{} : Maybe<&2, Value.Json>}
+
+# LAW: an array query parameter is a pair for each item
+# MCP-OAS-9
+law oas_query_array:
+  for +name: String
+  for +cs: Value.Json
+  {Openapi.query(name, Value.JArr{cs})
+    == Openapi.query.items(name, Json.items(Value.JArr{cs}))
+    : List<&2, Qs.Kv()>}
+
+# LAW: but a null item
+# MCP-OAS-9
+law oas_query_null:
+  for +name: String
+  for rest: List<&2, Value.Json>
+  {Openapi.query.items(name, Value.JNull{} <> rest)
+    == Openapi.query.items(name, rest) : List<&2, Qs.Kv()>}
+
+# LAW: a string query parameter is one pair of it
+# MCP-OAS-9
+law oas_query_str:
+  for +name: String
+  for str: String
+  {Openapi.query(name, Value.JStr{str}) == [(name, str)] : List<&2, Qs.Kv()>}
+
+# LAW: a number's text is its text
+# MCP-OAS-9
+law oas_plain_num:
+  for raw: String
+  {Openapi.plain(Value.JNum{raw}) == raw : String}
+
+# LAW: a path still holding a template expression is unfilled
+# MCP-OAS-9
+law oas_unfilled:
+  for method: String
+  for +mt: String
+  for +body: Maybe<&2, String>
+  for +path: String
+  for pairs: List<&2, Qs.Kv()>
+  for hs: List<&2, Http.Header>
+  for e: {String.contains(path, "{") == True{} : Bool}
+  {Openapi.call.of(method, mt, body, Openapi.Req{path, pairs, hs})
+    == Openapi.Unfilled{path} : Openapi.Call}
+
+# LAW: else the request is sent, with its header fields in order
+# MCP-OAS-9
+law oas_send:
+  for method: String
+  for +mt: String
+  for +body: Maybe<&2, String>
+  for +path: String
+  for pairs: List<&2, Qs.Kv()>
+  for hs: List<&2, Http.Header>
+  for e: {String.contains(path, "{") == False{} : Bool}
+  {Openapi.call.of(method, mt, body, Openapi.Req{path, pairs, hs})
+    == Openapi.Send{method, path ++ Openapi.query.text(pairs), List.append(&2,
+      Http.Header, Http.H{"Accept", "application/json"} <> hs, Openapi.ctype(mt,
+      body)), body} : Openapi.Call}
+
+# LAW: no pairs is no query string
+# MCP-OAS-9
+law oas_query_text_none:
+  for pairs: List<&2, Qs.Kv()>
+  for e: {List.is_empty(&2, Qs.Kv(), pairs) == True{} : Bool}
+  {Openapi.query.text(pairs) == "" : String}
+
+# LAW: an operation with no body sends none
+# MCP-OAS-9
+law oas_body_absent:
+  for +mt: String
+  for +args: Value.Json
+  {Openapi.body.arg(True{}, mt, args) == None{} : Maybe<&2, String>}
+
+# LAW: a JSON body is its JSON
+# MCP-OAS-9
+law oas_body_sent:
+  for val: Value.Json
+  {Openapi.body.of("application/json", Some{val}) == Some{Json.print(val)}
+    : Maybe<&2, String>}
+
+# LAW: no body names no media type
+# MCP-OAS-9
+law oas_ctype_none:
+  for +mt: String
+  {Openapi.ctype(mt, None{}) == [] : List<&2, Http.Header>}
+
+# LAW: a body names its media type
+# MCP-OAS-9
+law oas_ctype_body:
+  for +mt: String
+  for body: String
+  {Openapi.ctype(mt, Some{body}) == [Http.H{"Content-Type", mt}]
+    : List<&2, Http.Header>}
+
+# LAW: a call's arguments are checked for a missing name, then a bad value
+# MCP-OAS-10
+law oas_check:
+  for +name: String
+  for description: String
+  for +input: Value.Json
+  for method: String
+  for path: String
+  for params: List<&2, Openapi.Param>
+  for media: String
+  for +args: Value.Json
+  {Openapi.check(Openapi.Op{name, description, input, method, path, params,
+    media}, args) == Openapi.check.of(name, Openapi.first(Openapi.missing(
+    Json.items(Json.get(input, "required")), args), Openapi.bad(Openapi.members(
+    Json.get(input, "properties")), args))) : Maybe<&2, String>}
+
+# LAW: nothing wrong is none
+# MCP-OAS-10
+law oas_check_ok:
+  for name: String
+  {Openapi.check.of(name, None{}) == None{} : Maybe<&2, String>}
+
+# LAW: else what is wrong, for the tool
+# MCP-OAS-10
+law oas_check_why:
+  for name: String
+  for why: String
+  {Openapi.check.of(name, Some{why})
+    == Some{"Invalid arguments for tool '" ++ name ++ "': " ++ why}
+    : Maybe<&2, String>}
+
+# LAW: no required names lack none
+# MCP-OAS-10
+law oas_missing_none:
+  for +args: Value.Json
+  {Openapi.missing([], args) == None{} : Maybe<&2, String>}
+
+# LAW: a required name the arguments lack is required
+# MCP-OAS-10
+law oas_missing_hit:
+  for +name: String
+  for rest: List<&2, Value.Json>
+  for +args: Value.Json
+  for e: {Json.has(args, name) == False{} : Bool}
+  {Openapi.missing(Value.JStr{name} <> rest, args) == Some{name ++ ": Required"}
+    : Maybe<&2, String>}
+
+# LAW: a schema with no type takes any value
+# MCP-OAS-10
+law oas_typed_any:
+  for +val: Value.Json
+  {Openapi.typed(Value.JNull{}, val) == True{} : Bool}
+
+# LAW: a string is of type string
+# MCP-OAS-10
+law oas_kind_string:
+  for str: String
+  {Openapi.kind("string", Value.JStr{str}) == True{} : Bool}
+
+# LAW: a number is of type number
+# MCP-OAS-10
+law oas_kind_number_text:
+  for raw: String
+  {Openapi.kind("number", Value.JNum{raw}) == True{} : Bool}

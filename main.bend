@@ -16,6 +16,7 @@ import ./src/server.bend as Server
 import ./src/web.bend as Web
 import ./src/client.bend as Client
 import ./src/io.bend as Io
+import ./src/openapi.bend as Openapi
 
 # --- servers ---
 
@@ -213,6 +214,58 @@ def http.serve_with(
 ) -> IO(Unit):
   Io.http.serve_forever_with(C, run, srv, path, origins, ctx, host, port, max)
 
+# --- with the server in the context ---
+#
+# A server built at run time (from an OpenAPI document read at startup,
+# say) cannot be a `~srv` either. These read it from the context, with
+# `srv(ctx)`, on every request.
+
+# one request to the MCP endpoint at `path`, its server and runner given
+# `ctx`
+def http.handle_from(
+  ~C: Data,
+  ~srv: C -> Server.Server,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  req: Http.Request
+) -> IO(Http.Reply):
+  Io.http.web(C, run, ctx, Web.decide(srv(ctx), path, origins, req))
+
+# serve the endpoint on host:port for `limit` connections, its server and
+# runner given `ctx`, each connection on its own fork and at most `max` at
+# once (0: no limit), then stop once every connection is closed
+def http.serve_from(
+  ~C: Data,
+  ~srv: C -> Server.Server,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  host: String,
+  port: U32,
+  limit: U32,
+  max: U32
+) -> IO(Unit):
+  Io.http.serve_from(C, srv, run, path, origins, ctx, host, port, limit, max)
+
+# serve the endpoint on host:port, its server and runner given `ctx`, each
+# connection on its own fork and at most `max` at once (0: no limit), until
+# the process is stopped
+@unsafe def http.serve_forever_from(
+  ~C: Data,
+  ~srv: C -> Server.Server,
+  ~run: C -> String -> Value.Json -> IO(Rpc.Out),
+  ~path: String,
+  ~origins: List<&2, String>,
+  +ctx: C,
+  host: String,
+  port: U32,
+  max: U32
+) -> IO(Unit):
+  Io.http.serve_forever_from(C, srv, run, path, origins, ctx, host, port, max)
+
 # serve stdin and stdout, its runner given `ctx`, until stdin ends
 @unsafe def stdio.serve_with(
   ~C: Data,
@@ -231,6 +284,45 @@ def http.serve_with(
   ~srv: Server.Server
 ) -> IO(Unit):
   Io.stdio.serve(run, srv)
+
+# --- OpenAPI ---
+#
+# An OpenAPI 3.0 or 3.1 document as a tool table, one tool for each
+# operation, and a tool call as the HTTP request it stands for. Build the
+# server with `server(...)` of each op's `openapi.tool` once the document
+# is read, and serve it with `http.serve_forever_from`; in the runner,
+# `openapi.check` the arguments (refuse.params when they do not fit), then
+# send `openapi.call`'s request with ezhttp.
+
+# every operation of an OpenAPI document (a JSON value), in the order of
+# its paths, each path's in the order get, put, post, delete, options,
+# head, patch, trace; its local references (`#/...`) followed
+def openapi.ops(doc: Value.Json) -> List<&2, Openapi.Op>:
+  Openapi.ops(doc)
+
+# an operation's tool: its name, description and input schema
+def openapi.tool(op: Openapi.Op) -> Server.Tool:
+  Openapi.tool(op)
+
+# an operation's tool name: its operationId as a tool name
+def openapi.name(op: Openapi.Op) -> String:
+  Openapi.name(op)
+
+# an operation under another tool name, for a client that limits names
+def openapi.renamed(op: Openapi.Op, name: String) -> Openapi.Op:
+  Openapi.renamed(op, name)
+
+# what is wrong with a call's arguments for an operation's input schema,
+# when anything is: Some of the message, or None when they fit
+def openapi.check(op: Openapi.Op, args: Value.Json) -> Maybe<&2, String>:
+  Openapi.check(op, args)
+
+# the request a call of an operation with these arguments stands for:
+# Send{method, target, headers, body} (the target is the path and query,
+# for the caller to append to the API's base URL), or Unfilled{path} when a
+# path parameter has no argument
+def openapi.call(op: Openapi.Op, args: Value.Json) -> Openapi.Call:
+  Openapi.call(op, args)
 
 # --- client ---
 

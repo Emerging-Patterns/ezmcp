@@ -106,6 +106,18 @@ def run(base: String, tool: String, args: Value.Json) -> IO(Rpc.Out):
 `Mcp.stdio.serve_with(~C, ~run, ~srv, ctx)`, `Mcp.http.serve_with` (for
 `limit` connections) and `Mcp.http.handle_with` do the same.
 
+A server built at run time, from a document read at startup say, cannot be
+a `~srv` either. The `_from` serves take the server from the context too,
+as `srv(ctx)`, on every request:
+
+```
+Mcp.http.serve_forever_from(~Api, ~api.srv, ~run, ~"/mcp", ~[], api,
+  "0.0.0.0", 3000, 0)
+```
+
+`Mcp.http.serve_from` (for `limit` connections) and `Mcp.http.handle_from`
+do the same.
+
 ### Connections at once
 
 The HTTP serves run on ezhttp, which serves each connection on its own
@@ -144,6 +156,9 @@ endpoint in an ezhttp server that serves other paths too, hand requests to
 | `http.serve_with(~C, ~run, ~srv, ~path, ~origins, ctx, host, port, limit, max)` | `IO(Unit)` | `http.serve` with a context, at most `max` connections at once |
 | `http.handle_with(~C, ~run, ~srv, ~path, ~origins, ctx, req)` | `IO(Http.Reply)` | `http.handle` with a context |
 | `stdio.serve_with(~C, ~run, ~srv, ctx)` | `IO(Unit)` | `stdio.serve` with a context (`@unsafe`) |
+| `http.serve_forever_from(~C, ~srv, ~run, ~path, ~origins, ctx, host, port, max)` | `IO(Unit)` | `http.serve_forever_with` with the server `srv(ctx)` (`@unsafe`) |
+| `http.serve_from(~C, ~srv, ~run, ~path, ~origins, ctx, host, port, limit, max)` | `IO(Unit)` | `http.serve_with` with the server `srv(ctx)` |
+| `http.handle_from(~C, ~srv, ~run, ~path, ~origins, ctx, req)` | `IO(Http.Reply)` | `http.handle_with` with the server `srv(ctx)` |
 | `step(srv, rev, text)` | `Server.Act` | what a server does with one message read by revision `rev`, for a transport of your own |
 | `turn(srv, rev, text)` | `Server.Turn` | `step`'s act and the revision a stream's next message is read by |
 | `ran(rev, id, out)` | `Json` | the reply to a tool call once the runner answered |
@@ -171,6 +186,37 @@ allowed when it is a page on this machine (`localhost`, `127.0.0.1`, `[::1]`)
 or one of `origins`; any other is 403, which stops DNS rebinding. Bind
 `127.0.0.1` unless the endpoint sits behind a proxy that authenticates:
 ezmcp does no authorization.
+
+## OpenAPI
+
+`src/openapi.bend` reads an OpenAPI 3.0 or 3.1 document (a JSON value) as
+a tool table, one tool for each operation, and a tool call as the HTTP
+request it stands for:
+
+```
+ops : List<Openapi.Op> = Mcp.openapi.ops(doc)
+srv = Mcp.server("pets", "1.0.0", "", tools(ops))  # openapi.tool of each
+```
+
+A tool is named by its operationId (sanitized to `[A-Za-z0-9_-]`, or
+one made from the method and path when there is none, `PostPets` for
+`POST /pets`) and described by its description or
+summary; its input schema has a property for each path, query and header
+parameter and a `requestBody` property for a JSON or text body, with
+local references (`#/...`) followed. In the runner, `openapi.check(op,
+args)` says what is wrong with the arguments (refuse with
+`refuse.params`), and `openapi.call(op, args)` is
+`Send{method, target, headers, body}`, the target being the path and query
+to append to the API's base URL, or `Unfilled{path}` when a path parameter
+has no argument. Send it with ezhttp. The table and the requests follow
+openapi-mcp-generator 4, so a server built on them answers like the
+adapters it generates. `openapi.renamed(op, name)` renames a tool, for a
+client that limits names.
+
+Servers, security schemes, external references, cookie parameters and
+parameter styles other than the default are not read: the caller supplies
+the base URL and any credentials. `examples/openapi` serves a small
+document.
 
 ## A client
 
@@ -209,7 +255,10 @@ content and a tool error); `examples/client` runs a session against any
 endpoint (`./client http://127.0.0.1:8000/mcp add '{"a":2,"b":40}'`);
 `examples/conformance` serves the tools the
 [MCP conformance suite](https://github.com/modelcontextprotocol/conformance)
-calls. Build on the C lane (`-o`): the JS lane runs out of stack on large
+calls; `examples/openapi` serves an OpenAPI document's operations,
+answering each call with the request it stands for
+(`./openapi list`, `./openapi call get_pet '{"pet_id":7}'`,
+`./openapi http 8000 10`). Build on the C lane (`-o`): the JS lane runs out of stack on large
 bodies.
 
 ## Guarantees
