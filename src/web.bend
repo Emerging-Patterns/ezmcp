@@ -1,8 +1,8 @@
 # ezmcp/src/web: the streamable HTTP transport's decisions, with no IO
 # (basic/transports#streamable-http). One HTTP request in, a reply out, or a
-# tool call for src/io.bend to run before it replies with `ran`. Every POST
-# is answered with one JSON body or 202; there is no SSE stream and no
-# session.
+# tool call (or, under 2025-03-26, a batch) for src/io.bend to run before it
+# replies. Every POST is answered with one JSON body or 202; there is no SSE
+# stream and no session.
 import Base
 import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
@@ -10,10 +10,13 @@ import 0xa4d47e5f0f6044ac1a983d1b051fa47a/src/http.bend as Http
 import ./rpc.bend as Rpc
 import ./server.bend as Server
 
-# what the transport does with one HTTP request
+# what the transport does with one HTTP request: reply now, run a tool
+# first, or run a batch's acts first; `rev` is the revision the request is
+# read by
 type Web is Data:
   Now{status: U32, headers: List<&2, Http.Header>, body: String}
-  Later{id: Value.Json, name: String, args: Value.Json}
+  Later{rev: String, id: Value.Json, name: String, args: Value.Json}
+  Many{rev: String, acts: List<&2, Server.Act>}
 
 # the header a JSON body carries
 def json() -> List<&2, Http.Header>:
@@ -23,10 +26,10 @@ def json() -> List<&2, Http.Header>:
 def json.reply(status: U32, val: Value.Json) -> Web:
   Now{status, json(), Json.print(val)}
 
-# a server's act as an HTTP reply: a request's reply is 200 with its JSON, a
-# notification or a response is 202 with no body, a message the server
-# cannot accept is 400 with its error
-def act(lead: Server.Act) -> Web:
+# a server's act, under revision `rev`, as an HTTP reply: a request's reply
+# is 200 with its JSON, a notification or a response is 202 with no body, a
+# message the server cannot accept is 400 with its error
+def act(rev: String, lead: Server.Act) -> Web:
   match lead:
     case Server.Quiet{}:
       Now{202, [], ""}
@@ -35,11 +38,22 @@ def act(lead: Server.Act) -> Web:
     case Server.Fault{reply}:
       json.reply(400, reply)
     case Server.Run{id, name, args}:
-      Later{id, name, args}
+      Later{rev, id, name, args}
+    case Server.Batch{acts}:
+      Many{rev, acts}
 
 # the reply to a tool call, once it ran
-def ran(id: Value.Json, result: Value.Json) -> Web:
-  json.reply(200, Server.ran(id, result))
+def ran(rev: String, id: Value.Json, result: Value.Json) -> Web:
+  json.reply(200, Server.ran(rev, id, result))
+
+# the reply to a batch once its acts ran: 202 with no body when none had a
+# reply, else 200 with the array of the replies
+def many(replies: Maybe<&2, Value.Json>) -> Web:
+  match replies:
+    case None{}:
+      Now{202, [], ""}
+    case Some{batch}:
+      json.reply(200, batch)
 
 # a request-target's path: everything before `?`
 def path.of(target: String) -> String:
@@ -117,36 +131,50 @@ def origin.ok(origins: List<&2, String>, +origin: String) -> Bool:
 def version.ok(+val: String) -> Bool:
   Bool.or(String.is_empty(val), Server.supported(val))
 
+# the revision a request is read by: its MCP-Protocol-Version, or 2025-03-26
+# when it has none (basic/transports#protocol-version-header)
+def revision(+val: String) -> String:
+  Bool.pick(String, String.is_empty(val), Server.oldest(), val)
+
 # a plain-text reply
 def text(status: U32, body: String) -> Web:
   Now{status, [Http.H{"Content-Type", "text/plain"}], body}
 
-# a POST: refused for an unsupported revision, else the server's step
-def post(srv: Server.Server, body: String, version: Bool) -> Web:
-  match version:
+# a POST read by revision `rev`: the server's step on its body
+def post.as(srv: Server.Server, body: String, +rev: String) -> Web:
+  act(rev, Server.step(srv, rev, body))
+
+# a POST: refused for an unsupported revision, else the server's step under
+# the revision its header names
+def post.ok(srv: Server.Server, body: String, header: String, ok: Bool) -> Web:
+  match ok:
     case False{}:
       text(400, "Bad Request: unsupported MCP-Protocol-Version")
     case True{}:
-      act(Server.step(srv, body))
+      post.as(srv, body, revision(header))
+
+# a POST: the decision on its MCP-Protocol-Version header, empty when absent
+def post(srv: Server.Server, body: String, +header: String) -> Web:
+  post.ok(srv, body, header, version.ok(header))
 
 # any method but POST is 405
 def method(
   srv: Server.Server,
   body: String,
-  version: Bool,
+  header: String,
   is_post: Bool
 ) -> Web:
   match is_post:
     case False{}:
       Now{405, [Http.H{"Allow", "POST"}], ""}
     case True{}:
-      post(srv, body, version)
+      post(srv, body, header)
 
 # a request whose Origin is not allowed is 403
 def origin(
   srv: Server.Server,
   body: String,
-  version: Bool,
+  header: String,
   is_post: Bool,
   allowed: Bool
 ) -> Web:
@@ -154,23 +182,24 @@ def origin(
     case False{}:
       text(403, "Forbidden: Origin not allowed")
     case True{}:
-      method(srv, body, version, is_post)
+      method(srv, body, header, is_post)
 
 # the decision over a request's parts: the path first, then the Origin, then
-# the method, then the protocol version, then the body
+# the method, then the protocol version (its MCP-Protocol-Version header,
+# empty when absent), then the body
 def route(
   srv: Server.Server,
   here: Bool,
   allowed: Bool,
   is_post: Bool,
-  version: Bool,
+  header: String,
   body: String
 ) -> Web:
   match here:
     case False{}:
       text(404, "Not Found")
     case True{}:
-      origin(srv, body, version, is_post, allowed)
+      origin(srv, body, header, is_post, allowed)
 
 # what the transport does with one HTTP request to an endpoint at `path`,
 # which allows the browser origins listed
@@ -187,12 +216,14 @@ def decide(
       route(srv, String.eq(path.of(target), path),
         origin.ok(origins, Http.headers.find(headers, "Origin")),
         String.eq(m, "POST"),
-        version.ok(Http.headers.find(headers, "MCP-Protocol-Version")), body)
+        Http.headers.find(headers, "MCP-Protocol-Version"), body)
 
-# a Web reply as ezhttp's reply (a Later never reaches here)
+# a Web reply as ezhttp's reply (a Later or a Many never reaches here)
 def reply(wid: Web) -> Http.Reply:
   match wid:
     case Now{status, headers, body}:
       Http.Reply{status, headers, body}
-    case Later{id, name, args}:
+    case Later{rev, id, name, args}:
       Http.Reply{500, [], "ezmcp: a tool call was not run"}
+    case Many{rev, acts}:
+      Http.Reply{500, [], "ezmcp: a batch was not run"}

@@ -2,6 +2,7 @@
 import Base
 import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
+import 0xa81e161008ecc2f297c0a3065cb9b188/src/lazy.bend as Lazy
 import 0xa4d47e5f0f6044ac1a983d1b051fa47a/src/http.bend as Http
 import ./src/rpc.bend as Rpc
 import ./src/server.bend as Server
@@ -507,7 +508,7 @@ def Laws.answer_id(id, s):
     case Server.Call{name, args}:
       {==}
 
-def Laws.ran_id(_id, _result):
+def Laws.ran_id(_rev, _id, _result):
   {==}
 
 def Laws.reply_ok_one(_id, _result):
@@ -548,9 +549,9 @@ def Laws.notice_v2(_m, _params):
 def Laws.not_v2_junk(_has_id, _ok, _id, _m, _params, _r, _e):
   {==}
 
-def Laws.parse_error(srv, text, e):
+def Laws.parse_error(srv, rev, text, e):
   f = Equal.sym(Maybe<&2, Value.Json>, Json.parse(text), None{}, e)
-  %f : {Server.parsed(srv, _)
+  %f : {Server.turn.act(Server.turn.parsed(srv, rev, _))
     == Server.Fault{Rpc.reply(Json.null(),
       Rpc.Err{Rpc.ParseError{}, "Parse error"})} : Server.Act}
   {==}
@@ -626,7 +627,7 @@ def Laws.negotiate_echo(v, e):
 
 def Laws.negotiate_latest(v, e):
   f = Equal.sym(Bool, Server.supported(v), False{}, e)
-  %f : {Server.negotiate.of(v, _) == Server.latest() : String}
+  %f : {Server.negotiate.of(v, _) == "2025-11-25" : String}
   {==}
 
 def Laws.negotiate_supported(asked):
@@ -744,7 +745,10 @@ def Laws.result_content(blocks, _bad):
 def Laws.text_block(_s):
   {==}
 
-def Laws.ran_result(_id, _result):
+def Laws.ran_result(rev, id, result, e):
+  f = Equal.sym(Bool, String.eq(rev, "2025-03-26"), False{}, e)
+  %f : {Json.get(Rpc.reply(id, Rpc.Ok{Server.shape.of(result, _)}), "result")
+    == result : Value.Json}
   {==}
 
 def Laws.structured_value(_v, _bad):
@@ -756,43 +760,72 @@ def Laws.structured_text(v, _bad):
 def Laws.web_parts(_srv, _path, _origins, _m, _target, _headers, _body):
   {==}
 
-def Laws.web_post(_srv, _body):
+def Laws.web_post(srv, header, body, e):
+  f = Equal.sym(Bool, Web.version.ok(header), True{}, e)
+  %f : {Web.post.ok(srv, body, header, _)
+    == Web.act(Web.revision(header),
+      Server.step(srv, Web.revision(header), body)) : Web.Web}
   {==}
 
-def Laws.web_send(_reply):
+def Laws.web_send(_rev, _reply):
   {==}
 
-def Laws.web_ran(_id, _result):
+def Laws.web_ran(_rev, _id, _result):
   {==}
 
-def Laws.web_run(_id, _name, _args):
+def Laws.web_run(_rev, _id, _name, _args):
   {==}
 
-def Laws.web_tell(_srv, _m, _params):
+def Laws.web_tell(_rev, _srv, _m, _params):
   {==}
 
-def Laws.web_answer(_srv, _id):
+def Laws.web_answer(_rev, _srv, _id):
   {==}
 
-def Laws.web_fault(_reply):
+def Laws.web_fault(_rev, _reply):
   {==}
 
 def Laws.web_bad(_srv, _path, _origins, _why):
   {==}
 
-def Laws.web_not_post(_srv, _version, _body):
+def Laws.web_not_post(_srv, _header, _body):
   {==}
 
-def Laws.web_origin(_srv, _is_post, _version, _body):
+def Laws.web_origin(_srv, _is_post, _header, _body):
   {==}
 
-def Laws.web_version(_srv, _body):
+def Laws.web_version(srv, header, body, e):
+  f = Equal.sym(Bool, Web.version.ok(header), False{}, e)
+  %f : {Web.post.ok(srv, body, header, _)
+    == Web.text(400, "Bad Request: unsupported MCP-Protocol-Version")
+    : Web.Web}
   {==}
 
 def Laws.version_ok(_v):
   {==}
 
-def Laws.web_path(_srv, _allowed, _is_post, _version, _body):
+def Laws.web_path(_srv, _allowed, _is_post, _header, _body):
+  {==}
+
+def Laws.revision_absent(v, e):
+  f = Equal.sym(Bool, String.is_empty(v), True{}, e)
+  %f : {Bool.pick(String, _, Server.oldest(), v) == "2025-03-26" : String}
+  {==}
+
+def Laws.revision_named(v, e):
+  f = Equal.sym(Bool, String.is_empty(v), False{}, e)
+  %f : {Bool.pick(String, _, Server.oldest(), v) == v : String}
+  {==}
+
+def Laws.web_batch(_rev, _acts):
+  {==}
+
+def Laws.web_many_none(replies, e):
+  f = Equal.sym(List<&2, Value.Json>, Server.batch.some(replies), [], e)
+  %f : {Web.many(Server.batch.gather(_)) == Web.Now{202, [], ""} : Web.Web}
+  {==}
+
+def Laws.web_many_some(_batch):
   {==}
 
 
@@ -846,14 +879,16 @@ def Laws.utf8_bad_cont(a, b, t, go, w, c):
     == SCon{Line.bad(), go(b <> t)} : String}
   {==}
 
-def Laws.line_blank(srv, text, e):
+def Laws.line_blank(srv, rev, text, e):
   f = Equal.sym(Bool, String.is_empty(String.trim(text)), True{}, e)
-  %f : {Line.line.of(srv, text, _) == Server.Quiet{} : Server.Act}
+  %f : {Line.line.of(srv, rev, text, _) == Server.Turn{Server.Quiet{}, rev}
+    : Server.Turn}
   {==}
 
-def Laws.line_message(srv, text, e):
+def Laws.line_message(srv, rev, text, e):
   f = Equal.sym(Bool, String.is_empty(String.trim(text)), False{}, e)
-  %f : {Line.line.of(srv, text, _) == Server.step(srv, text) : Server.Act}
+  %f : {Line.line.of(srv, rev, text, _) == Server.turn(srv, rev, text)
+    : Server.Turn}
   {==}
 
 def Laws.frame_line(_v):
@@ -1001,4 +1036,222 @@ def Laws.origin_unlisted(listed, rest, origin, e):
   f = Equal.sym(Bool, String.eq(listed, origin), False{}, e)
   %f : {Web.origin.or(_, _u => Web.origin.listed(rest, origin))
     == Web.origin.listed(rest, origin) : Bool}
+  {==}
+
+# --- revisions, batches and streams ---
+
+def Laws.supported_revisions(_v):
+  {==}
+
+def Laws.array_refused(srv, rev, items, e):
+  f = Equal.sym(Bool, Server.batches(rev), False{}, e)
+  %f : {Server.turn.value(srv, rev, Json.arr(items), _)
+    == Server.Turn{Server.Fault{Rpc.reply(Json.null(),
+      Rpc.Err{Rpc.InvalidRequest{}, "Invalid Request: not a JSON-RPC object"})},
+      rev} : Server.Turn}
+  {==}
+
+def Laws.batches_oldest(_rev):
+  {==}
+
+def Laws.batch_turn(srv, items):
+  f = Equal.sym(List<&2, Value.Json>, Value.items.go(Value.arr.go(items)),
+    items, eq.items_arr(items))
+  %f : {Server.Turn{Server.batch(srv, _), "2025-03-26"}
+    == Server.Turn{Server.batch(srv, items), "2025-03-26"} : Server.Turn}
+  {==}
+
+def Laws.batch_empty(_srv):
+  {==}
+
+def Laws.batch_acts(_srv, _i, _rest):
+  {==}
+
+def Laws.batch_all_each(_srv, _i, _rest):
+  {==}
+
+def Laws.batch_all_nil(_srv):
+  {==}
+
+def Laws.batch_init(_srv, _id, _params):
+  {==}
+
+def Laws.batch_ask(srv, id, m, params, e):
+  f = Equal.sym(Bool, String.eq(m, "initialize"), False{}, e)
+  %f : {Server.batch.init(id, Rpc.Ask{id, m, params}, _, srv)
+    == Server.handle(srv, Rpc.Ask{id, m, params}) : Server.Act}
+  {==}
+
+def Laws.batch_tell(_srv, _m, _params):
+  {==}
+
+def Laws.batch_junk_one(_srv, _id, _why):
+  {==}
+
+def Laws.batch_reply_none(replies, e):
+  f = Equal.sym(List<&2, Value.Json>, Server.batch.some(replies), [], e)
+  %f : {Server.batch.gather(_) == None{} : Maybe<&2, Value.Json>}
+  {==}
+
+def Laws.batch_reply_some(replies, r, rest, e):
+  f = Equal.sym(List<&2, Value.Json>, Server.batch.some(replies), r <> rest, e)
+  %f : {Server.batch.gather(_) == Some{Json.arr(r <> rest)}
+    : Maybe<&2, Value.Json>}
+  {==}
+
+def Laws.batch_some_skip(_rest):
+  {==}
+
+def Laws.batch_some_keep(_r, _rest):
+  {==}
+
+def Laws.session_init(_rev, _id, _params):
+  {==}
+
+def Laws.session_ask(rev, _id, m, params, e):
+  f = Equal.sym(Bool, String.eq(m, "initialize"), False{}, e)
+  %f : {Server.session.ask(rev, params, _) == rev : String}
+  {==}
+
+def Laws.session_tell(_rev, _m, _params):
+  {==}
+
+def Laws.session_answer(_rev, _id):
+  {==}
+
+def Laws.session_junk(_rev, _id, _why):
+  {==}
+
+def Laws.turn_one(_srv, _rev, _v):
+  {==}
+
+def Laws.turn_unparsed(_srv, _rev):
+  {==}
+
+def Laws.step_turn(_srv, _rev, _text):
+  {==}
+
+# --- leaving a member out ---
+
+def without.lem.pair(
+  +k: String,
+  v: Value.Json,
+  r: Value.Json,
+  +key: String,
+  hit: Bool,
+  e: {Value.find.eq(k, key) == hit : Bool},
+  ih: {Value.has.go(Server.without.go(r, key), key) == False{} : Bool}
+) -> {Value.has.go(Server.without.pair(hit, k, v, Server.without.go(r, key)),
+  key) == False{} : Bool}:
+  match hit:
+    case True{}:
+      ih
+    case False{}:
+      f = Equal.sym(Bool, Value.find.eq(k, key), False{}, e)
+      %f : {Lazy.stop(Bool, _, True{},
+        _u => Value.has.go(Server.without.go(r, key), key)) == False{} : Bool}
+      ih
+
+def without.lem.bind(
+  +src: String,
+  +num: U32,
+  v: Value.Json,
+  r: Value.Json,
+  +key: String,
+  hit: Bool,
+  e: {Value.span.eq(src, num, key) == hit : Bool},
+  ih: {Value.has.go(Server.without.go(r, key), key) == False{} : Bool}
+) -> {Value.has.go(Server.without.bind(hit, src, num, v,
+  Server.without.go(r, key)), key) == False{} : Bool}:
+  match hit:
+    case True{}:
+      ih
+    case False{}:
+      f = Equal.sym(Bool, Value.span.eq(src, num, key), False{}, e)
+      %f : {Lazy.stop(Bool, _, True{},
+        _u => Value.has.go(Server.without.go(r, key), key)) == False{} : Bool}
+      ih
+
+# an object's members less every one named `key` hold none named `key`
+def without.lem(
+  cells: Value.Json,
+  +key: String
+) -> {Value.has.go(Server.without.go(cells, key), key) == False{} : Bool}:
+  match cells:
+    case Value.JPair{+k, v, +r}:
+      without.lem.pair(k, v, r, key, Value.find.eq(k, key), {==},
+        without.lem(r, key))
+    case Value.JBind{+src, +num, v, +r}:
+      without.lem.bind(src, num, v, r, key, Value.span.eq(src, num, key), {==},
+        without.lem(r, key))
+    case Value.JNull{}:
+      {==}
+    case Value.JBool{_b}:
+      {==}
+    case Value.JNum{_raw}:
+      {==}
+    case Value.JStr{_s}:
+      {==}
+    case Value.JArr{_items}:
+      {==}
+    case Value.JObj{_pairs}:
+      {==}
+    case Value.JNil{}:
+      {==}
+    case Value.JCons{_h, _t}:
+      {==}
+    case Value.JSpan{_src, _n}:
+      {==}
+
+# a value less every member named `key` has none
+def without.lem.top(
+  v: Value.Json,
+  +key: String
+) -> {Json.has(Server.without(v, key), key) == False{} : Bool}:
+  match v:
+    case Value.JObj{pairs}:
+      without.lem(pairs, key)
+    case Value.JNull{}:
+      {==}
+    case Value.JBool{_b}:
+      {==}
+    case Value.JNum{_raw}:
+      {==}
+    case Value.JStr{_s}:
+      {==}
+    case Value.JArr{_items}:
+      {==}
+    case Value.JNil{}:
+      {==}
+    case Value.JCons{_h, _t}:
+      {==}
+    case Value.JPair{_k, _v, _r}:
+      {==}
+    case Value.JSpan{_src, _n}:
+      {==}
+    case Value.JBind{_src, _n, _v, _r}:
+      {==}
+
+def Laws.ran_unstructured(_id, result):
+  without.lem.top(result, "structuredContent")
+
+def Laws.ran_old_result(_id, _result):
+  {==}
+
+def Laws.without_keeps(k, v, r, key, e):
+  f = Equal.sym(Bool, Value.find.eq(k, key), False{}, e)
+  %f : {Server.without.pair(_, k, v, Server.without.go(r, key))
+    == Value.JPair{k, v, Server.without.go(r, key)} : Value.Json}
+  {==}
+
+def Laws.without_drops(k, v, r, key, e):
+  f = Equal.sym(Bool, Value.find.eq(k, key), True{}, e)
+  %f : {Server.without.pair(_, k, v, Server.without.go(r, key))
+    == Server.without.go(r, key) : Value.Json}
+  {==}
+
+def Laws.without_keeps_bind(src, num, v, r, key, e):
+  f = Equal.sym(Bool, Value.span.eq(src, num, key), False{}, e)
+  %f : {Server.without.bind(_, src, num, v, Server.without.go(r, key))
+    == Value.JBind{src, num, v, Server.without.go(r, key)} : Value.Json}
   {==}

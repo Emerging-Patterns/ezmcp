@@ -1,11 +1,11 @@
 # ezmcp
 
-[Model Context Protocol](https://modelcontextprotocol.io/specification/2025-06-18)
-servers and clients for [Bend 2](https://github.com/bendlang/bend), revision
-2025-06-18: JSON-RPC 2.0 messages, `initialize`, `ping`, `tools/list` and
-`tools/call`, served over streamable HTTP (on
-[ezhttp](https://github.com/Emerging-Patterns/ezhttp)) or stdio, and a client
-that speaks streamable HTTP.
+[Model Context Protocol](https://modelcontextprotocol.io/specification)
+servers and clients for [Bend 2](https://github.com/bendlang/bend), revisions
+2025-03-26, 2025-06-18 and 2025-11-25: JSON-RPC 2.0 messages,
+`initialize`, `ping`, `tools/list` and `tools/call`, served over streamable
+HTTP (on [ezhttp](https://github.com/Emerging-Patterns/ezhttp)) or stdio,
+and a client that speaks streamable HTTP.
 
 ## Install
 
@@ -97,13 +97,29 @@ endpoint in an ezhttp server that serves other paths too, hand requests to
 | `http.handle(~run, ~srv, ~path, ~origins, req)` | `IO(Http.Reply)` | one request, as an ezhttp IO handler |
 | `http.decide(srv, path, origins, req)` | `Web.Web` | the transport's decision for one request, with no IO |
 | `stdio.serve(~run, ~srv)` | `IO(Unit)` | serve stdin and stdout until stdin ends (`@unsafe`) |
-| `step(srv, text)` | `Server.Act` | what a server does with one message, for a transport of your own |
-| `ran(id, result)` | `Json` | the reply to a tool call once it ran |
-| `latest()` | `String` | `"2025-06-18"` |
+| `step(srv, rev, text)` | `Server.Act` | what a server does with one message read by revision `rev`, for a transport of your own |
+| `turn(srv, rev, text)` | `Server.Turn` | `step`'s act and the revision a stream's next message is read by |
+| `ran(rev, id, result)` | `Json` | the reply to a tool call once it ran |
+| `batch.reply(replies)` | `Maybe<Json>` | what a 2025-03-26 batch sends back, from its acts' replies |
+| `latest()` | `String` | `"2025-11-25"` |
+| `revisions()` | `List<String>` | the revisions ezmcp speaks, oldest first |
 
 Over HTTP every POST is answered with one JSON body (200), or 202 for a
 notification; GET and DELETE are 405, another path is 404, and an
-`MCP-Protocol-Version` ezmcp does not speak is 400. An `Origin` header is
+`MCP-Protocol-Version` ezmcp does not speak is 400.
+
+### Protocol revisions
+
+ezmcp speaks 2025-03-26, 2025-06-18 and 2025-11-25. `initialize` answers
+the revision the client asks for when it is one of them, and 2025-11-25
+otherwise. Over HTTP a request is read by the revision its
+`MCP-Protocol-Version` names, and by 2025-03-26 when it names none, as the
+specification asks; over stdio by the one the last `initialize` was answered
+with. Under 2025-03-26 a JSON-RPC batch (an array) is answered with an array
+of replies (202 over HTTP when it holds none), and a tool result leaves out
+`structuredContent`, which that revision does not have: `result.json`'s
+text block still carries the value. Under the later two an array is an
+invalid request. An `Origin` header is
 allowed when it is a page on this machine (`localhost`, `127.0.0.1`, `[::1]`)
 or one of `origins`; any other is 403, which stops DNS rebinding. Bind
 `127.0.0.1` unless the endpoint sits behind a proxy that authenticates:
@@ -147,9 +163,10 @@ bodies.
 ## Guarantees
 
 [SPEC.md](SPEC.md) lists every behavior ezmcp guarantees, each a requirement
-of MCP 2025-06-18 or JSON-RPC 2.0 cited by section, either proved by a
+of MCP 2025-03-26, 2025-06-18 or 2025-11-25, or of JSON-RPC 2.0, cited by
+section, either proved by a
 quantified law in `LAWS.bend` or named as a trusted assumption. A row marked
-pending is not guaranteed yet. Its last table lists the revision's
+pending is not guaranteed yet. Its last table lists the revisions'
 requirements for what ezmcp does not implement: resources, prompts, logging,
 completions, sampling, elicitation, roots, progress, cancellation, SSE
 streams on the server, sessions, pagination and authorization.

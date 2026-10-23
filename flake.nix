@@ -59,7 +59,9 @@
         '';
         # examples/demo on the C lane, over stdio and over HTTP on loopback:
         # initialize, notifications/initialized, tools/list, tools/call (a
-        # result, a tool error, an unknown tool) and a body that is not JSON;
+        # result, a tool error, an unknown tool) and a body that is not JSON,
+        # under 2025-06-18; then a 2025-03-26 session (a batch, a tool result
+        # with no structuredContent) and a revision ezmcp does not speak;
         # then examples/client runs a session against it. A smoke run, not
         # evidence for any SPEC.md row.
         smoke = pkgs.runCommand "ezmcp-smoke" {
@@ -88,10 +90,24 @@
           echo "$got"
           [ "$(echo "$got" | wc -l)" = 6 ] || exit 1
           check "$got"
+          old='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}'
+          batch='[{"jsonrpc":"2.0","method":"notifications/initialized"},{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"add","arguments":{"a":1,"b":2}}},{"jsonrpc":"2.0","id":8,"method":"ping"}]'
+          got=$(printf '%s\n' "$old" "$batch" '[]' | ./demo stdio)
+          echo "$got"
+          echo "$got" | grep -qF '"protocolVersion":"2025-03-26"' || exit 1
+          echo "$got" | grep -qxF '[{"jsonrpc":"2.0","id":7,"result":{"content":[{"type":"text","text":"{\"sum\":3}"}],"isError":false}},{"jsonrpc":"2.0","id":8,"result":{}}]' || exit 1
+          echo "$got" | grep -qF '"id":null,"error":{"code":-32600,"message":"Invalid Request: empty batch"}' || exit 1
+          got=$(printf '%s\n' "$init" "$batch" | ./demo stdio)
+          echo "$got" | grep -qF '"id":null,"error":{"code":-32600,"message":"Invalid Request: not a JSON-RPC object"}' || exit 1
           ./demo http 18765 100 &
           demo=$!
           for i in $(seq 50); do curl -s -o /dev/null http://127.0.0.1:18765/ && break; sleep 0.1; done
           post() {
+            curl -s -w ' %{http_code}\n' -H 'Content-Type: application/json' \
+              -H 'Accept: application/json, text/event-stream' \
+              -H "MCP-Protocol-Version: ''${2:-2025-06-18}" -d "$1" http://127.0.0.1:18765/mcp
+          }
+          bare() {
             curl -s -w ' %{http_code}\n' -H 'Content-Type: application/json' \
               -H 'Accept: application/json, text/event-stream' -d "$1" http://127.0.0.1:18765/mcp
           }
@@ -101,6 +117,12 @@
           echo "$http" | grep -qx ' 202' || exit 1
           echo "$http" | grep -q 'Parse error"}} 400$' || exit 1
           [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/mcp)" = 405 ] || exit 1
+          b=$(bare "$batch"); echo "$b"
+          echo "$b" | grep -qF '{"jsonrpc":"2.0","id":7,"result":{"content":[{"type":"text","text":"{\"sum\":3}"}],"isError":false}}' || exit 1
+          echo "$b" | grep -q '}] 200$' || exit 1
+          [ "$(bare '[{"jsonrpc":"2.0","method":"notifications/initialized"}]')" = ' 202' ] || exit 1
+          post "$add" 2025-11-25 | grep -qF '"structuredContent":{"sum":42}' || exit 1
+          post "$add" 2026-07-28 | grep -q ' 400$' || exit 1
           cd ../client
           bend main.bend -o client
           ses=$(./client http://127.0.0.1:18765/mcp add '{"a":5,"b":6}')
