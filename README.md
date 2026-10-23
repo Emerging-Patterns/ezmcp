@@ -31,6 +31,16 @@ Tool arguments and results are [ezjson](https://github.com/Emerging-Patterns/ezj
 values. Build them with the ezjson ezmcp is locked to (v1.2.0), so the two
 agree on the type: `ez add Emerging-Patterns/ezjson v1.2.0`.
 
+ezmcp imports its dependencies by hash: ezjson v1.2.0
+(`0xa81e161008ecc2f297c0a3065cb9b188`) and ezhttp v0.14.0
+(`0xa4d47e5f0f6044ac1a983d1b051fa47a`). A project that uses ezhttp too
+shares one copy with ezmcp only when it adds the same release
+(`ez add Emerging-Patterns/ezhttp v0.14.0`); any other release is a second
+package in its lock and its binary, and ezmcp's server runs on the one
+ezmcp names. ez has no override or version range that redirects a
+dependency's `0x` import, so the way to one copy is to keep the two
+releases equal.
+
 ## A server
 
 A server is a name, a version, instructions for the client and a tool

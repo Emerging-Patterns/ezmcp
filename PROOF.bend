@@ -2,7 +2,7 @@
 import Base
 import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
-import 0xd3f9c1f02240edb63fd4a109ceb8fa74/src/http.bend as Http
+import 0xa4d47e5f0f6044ac1a983d1b051fa47a/src/http.bend as Http
 import ./src/rpc.bend as Rpc
 import ./src/server.bend as Server
 import ./src/web.bend as Web
