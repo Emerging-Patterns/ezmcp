@@ -15,10 +15,10 @@ install: import ezmcp by its hub name and version, and `bend` fetches it from
 ezmcp is built and checked on Bend 2.0.38.
 
 ```
-import emerging-ezmcp@0.1.0.0/main.bend as Mcp
+import ezmcp@0.1.0.0/main.bend as Mcp
 ```
 
-`emerging-ezmcp@0.1.0.0` is ezmcp v0.1.0, once the release is published.
+`ezmcp@0.1.0.0` is ezmcp v0.1.0, once the release is published.
 
 Or with [ez](https://github.com/Emerging-Patterns/ez), which records the
 package in `ez.toml` (`ez init` makes one):
@@ -58,11 +58,11 @@ only for a tool the table names.
 
 ```
 import Base
-import emerging-ezjson@1.2.0.0/main.bend as Json
-import emerging-ezjson@1.2.0.0/src/value.bend as Value
-import emerging-ezmcp@0.1.0.0/main.bend as Mcp
-import emerging-ezmcp@0.1.0.0/src/rpc.bend as Rpc
-import emerging-ezmcp@0.1.0.0/src/server.bend as Server
+import ezjson@1.2.0.0/main.bend as Json
+import ezjson@1.2.0.0/src/value.bend as Value
+import ezmcp@0.1.0.0/main.bend as Mcp
+import ezmcp@0.1.0.0/src/rpc.bend as Rpc
+import ezmcp@0.1.0.0/src/server.bend as Server
 
 def srv() -> Server.Server:
   Mcp.server("greeter", "0.1.0", "", [
