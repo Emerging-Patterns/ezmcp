@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/Emerging-Patterns/ezmcp/compare/v0.1.0...v0.2.0) (2026-10-27)
+
+
+### Features
+
+* **nix:** build and check on x86_64-linux, aarch64-linux and aarch64-darwin ([#15](https://github.com/Emerging-Patterns/ezmcp/issues/15)) ([c8d39ce](https://github.com/Emerging-Patterns/ezmcp/commit/c8d39cebc58c7a967d4b22f0dd8fd97e60f23c45))
+
 ## 0.1.0 (2026-10-27)
 
 
