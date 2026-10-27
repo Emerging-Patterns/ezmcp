@@ -18,7 +18,9 @@ ezmcp is built and checked on Bend 2.0.38.
 import ezmcp@0.1.0.0/main.bend as Mcp
 ```
 
-`ezmcp@0.1.0.0` is ezmcp v0.1.0, once the release is published.
+`ezmcp@0.1.0.0` is ezmcp v0.1.0 and resolves to
+`0xe8a45a5d2dbc02504d10df4cabf172ea`; to pin by content, import
+`0xe8a45a5d2dbc02504d10df4cabf172ea/main.bend` instead.
 
 Or with [ez](https://github.com/Emerging-Patterns/ez), which records the
 package in `ez.toml` (`ez init` makes one):
