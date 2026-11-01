@@ -1,7 +1,52 @@
 # ezmcp/src/io: the effects. Every decision is src/web.bend's, src/line.bend's,
 # src/server.bend's or src/client.bend's; this module reads, runs the tool
-# runner, and writes, in order (MCP-TRUST-1). It reaches ezhttp's socket
-# effects, so no law file imports it.
+# runner, and writes, in order. It reaches ezhttp's socket effects, so no
+# law file imports it.
+#
+# Trusted, not proved: this module decides nothing and acts on the pure
+# modules' answers in order. The HTTP handler answers `Web.decide`'s reply,
+# sent as `Web.reply` of it; for a tool call it runs the runner once with
+# the name and arguments, then answers `Web.ran` of its result under the
+# request's revision; for a batch it does each act in order (a reply taken
+# as it is, a tool call run and its reply built with `Server.ran` under the
+# request's revision, a notification or response taking none), then answers
+# `Web.many` of `Server.batch.reply` of those replies. A serve `_with` a
+# context hands that context, unchanged, to every runner call. Every HTTP
+# serve is ezhttp's `http.serve_io_with` or `http.serve_forever_with` with
+# one handler, the endpoint's: it takes the request as ezhttp's plain
+# serves do (`server.plain`), answers `http.handle_with` of it, and hands
+# the reply back as their text answer (`server.text`); `http.serve` and
+# `http.serve_forever` are the `_with` serves with the context `Unit` and
+# `max` 0; a serve `_from` is the `_with` serve whose handler decides with
+# the server `srv(ctx)` reads from the context, on every request. The stdio
+# loop starts at `Server.latest()`, reads stdin a chunk at a time, acts on
+# every whole line of `Line.cut` in order under the revision the line
+# before it left (`Line.line`'s turn: a reply written as `Line.frame`, a
+# tool call run then its reply written, a batch's acts done in order and
+# `Server.batch.reply` of their replies written when there is one), keeps
+# the rest and the revision for the next read, acts on the rest as the last
+# line when a read is empty (stdin ended), and then returns; it writes
+# nothing else to stdout, and a failed read is written to stderr. The client
+# POSTs the message's JSON text with `Client.headers`, reads the reply to a
+# request with `Client.took`, and judges the reply to a notification with
+# `Client.accepted`. This is IO sequencing: effects are foreign, so the
+# checker cannot run an IO program and no law can state what happens after
+# an effect. Every decision it acts on is one the laws under laws/ prove.
+#
+# Trusted, not proved: ezhttp (pinned in ez.lock.toml) parses HTTP/1.1
+# requests and answers one that does not parse 400 itself (ezhttp's
+# laws/BadRequestAnswers400.bend); hands a `_with` handler the context and
+# the request decoded as UTF-8 (ezhttp's
+# laws/WithServesGetOctetsAndContext.bend); serves each connection on its
+# own fork, at most `max` at once, 0 for no limit (trusted in ezhttp's
+# src/server.bend); finds a header case-insensitively (ezhttp's
+# laws/FieldLookupIgnoresCase.bend); POSTs with a timeout (ezhttp's
+# laws/DeadlineIsTimeout.bend, trusted in its src/client.bend); and
+# `body_text` decodes a response's body as UTF-8 (ezhttp's
+# laws/OctetsDecodeAsUtf8.bend). Its socket effects
+# are foreign C and JS that no law here reaches. ezmcp keeps nothing between
+# requests (it issues no session), so connections served at once share only
+# the context, which nothing changes.
 import Base
 import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
@@ -94,7 +139,7 @@ def http.handle_with(
 #
 # ezhttp serves each connection on its own fork, reads and parses the
 # request, answers one it answers itself (a request that does not parse),
-# and calls the handler with the context for the rest (MCP-TRUST-2); the
+# and calls the handler with the context for the rest (trusted above); the
 # handler below is the endpoint's
 
 # the endpoint's answer to one request ezhttp read, as its plain serves
@@ -243,7 +288,18 @@ def http.serve(
 # --- stdio ---
 
 # up to `max` bytes from file descriptor 0, as one read(2) returns them;
-# empty at the end of input (MCP-TRUST-5)
+# empty at the end of input
+#
+# Trusted, not proved: `ezmcp.stdin(max)` (`src/effs/stdin.c`,
+# `src/effs/stdin.js`) answers the bytes one `read(2)` of file descriptor 0
+# returns, at most `max`, an empty list at the end of input, or
+# `Fail{(errno, message)}`; it reads the descriptor itself, so it works
+# whatever stdin is (a pipe, a file, a socket). Base's `IO.write` writes its
+# text to stdout in order, and `IO.print_err` to stderr. They are foreign C
+# and JS: ezmcp's own over `read(2)`, and Bend's runtime (`effs/write.c`,
+# `effs/print_err.c`), which no law reaches. Base has no stdin, and opening
+# `/dev/stdin` fails with ENXIO when stdin is a socket, as it is for a
+# server Node spawns.
 def ezmcp.stdin(max: U32) -> IO(Result<&1, &1, U32 & String, List<&2, U32>>):
   import "./effs/stdin.c"
   import "./effs/stdin.js"

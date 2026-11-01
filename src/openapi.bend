@@ -7,7 +7,8 @@
 # string and the header fields. The caller reads the document and sends the
 # request. Where the specifications leave a choice open, the choice is
 # openapi-mcp-generator's (v4), so a server it generated keeps its tools.
-# SPEC.md MCP-OAS lists what is guaranteed.
+# The OpenAPI guarantees under laws/ (laws/OperationsFromPaths.bend first)
+# state what is guaranteed.
 import Base
 import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
