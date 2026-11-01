@@ -11,11 +11,11 @@ import ../../main.bend as Mcp
 import ../../src/rpc.bend as Rpc
 
 # milliseconds each exchange may take
-def timeout() -> U32:  # noqa: L001 example program, no law's subject
+def timeout() -> U32:
   30000
 
 # a reply as one line
-def shown(reply: Rpc.Reply) -> String:  # noqa: L001 example program, no law's subject
+def shown(reply: Rpc.Reply) -> String:
   match reply:
     case Rpc.Got{id, result}:
       "got " ++ Json.print(id) ++ " " ++ Json.print(result)
@@ -25,7 +25,7 @@ def shown(reply: Rpc.Reply) -> String:  # noqa: L001 example program, no law's s
       "unread " ++ why
 
 # the revision a reply to initialize names
-def version(reply: Rpc.Reply) -> String:  # noqa: L001 example program, no law's subject
+def version(reply: Rpc.Reply) -> String:
   match reply:
     case Rpc.Got{_id, result}:
       Mcp.client.version(result)
@@ -33,11 +33,11 @@ def version(reply: Rpc.Reply) -> String:  # noqa: L001 example program, no law's
       ""
 
 # the arguments, {} when they are not JSON
-def args(text: String) -> Value.Json:  # noqa: L001 example program, no law's subject
+def args(text: String) -> Value.Json:
   Maybe.default(&2, Value.Json, Json.parse(text), Json.obj([]))
 
 # list the tools, then call one
-def rest(+url: String, +ver: String, tool: String, input: String) -> IO(Unit):  # noqa: L001 example program
+def rest(+url: String, +ver: String, tool: String, input: String) -> IO(Unit):
   do IO<Unit>:
     +told : Bool <- Mcp.client.tell(url, ver, timeout(), Mcp.client.initialized())
     _a : Unit <- IO.print("initialized accepted: " ++ Bool.show(told))
@@ -49,7 +49,7 @@ def rest(+url: String, +ver: String, tool: String, input: String) -> IO(Unit):  
     IO.print(shown(called))
 
 # a session against one endpoint
-def session(+url: String, tool: String, input: String) -> IO(Unit):  # noqa: L001 example program, no law's subject
+def session(+url: String, tool: String, input: String) -> IO(Unit):
   do IO<Unit>:
     +init : Rpc.Reply <- Mcp.client.ask(url, "", timeout(),
       Mcp.client.initialize(Json.num("1"), "ezmcp-client", "0.1.0"))
@@ -57,12 +57,12 @@ def session(+url: String, tool: String, input: String) -> IO(Unit):  # noqa: L00
     rest(url, version(init), tool, input)
 
 # the session the arguments name
-def mode(argv: List<String>) -> IO(Unit):  # noqa: L001 example program, no law's subject
+def mode(argv: List<String>) -> IO(Unit):
   match argv:
     case _prog <> url <> tool <> input <> _more:
       session(url, tool, input)
     case _other:
       IO.print_err("usage: client URL TOOL ARGS-JSON")
 
-def main() -> IO(Unit):  # noqa: L001 example program, no law's subject
+def main() -> IO(Unit):
   IO.bind(List<String>, Unit, IO.args(), mode)

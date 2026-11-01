@@ -24,7 +24,7 @@ def doc.text() -> String:
   "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"pets\",\"version\":\"1.0.0\"},\"paths\":{\"/pets/{pet_id}\":{\"parameters\":[{\"name\":\"pet_id\",\"in\":\"path\",\"required\":true,\"schema\":{\"type\":\"integer\"}}],\"get\":{\"operationId\":\"get_pet\",\"summary\":\"One pet\",\"parameters\":[{\"name\":\"fields\",\"in\":\"query\",\"schema\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},{\"name\":\"X-Trace\",\"in\":\"header\",\"schema\":{\"type\":\"string\"}}]},\"put\":{\"operationId\":\"pets.update\",\"description\":\"Update a pet\",\"requestBody\":{\"required\":true,\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/Pet\"}}}}}},\"/pets\":{\"post\":{\"requestBody\":{\"content\":{\"text/plain\":{}}}}}},\"components\":{\"schemas\":{\"Pet\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\",\"nullable\":true},\"age\":{\"type\":\"integer\",\"example\":3}},\"required\":[\"name\"]}}}}"
 
 # each operation's tool
-def tools(ops: List<&2, Openapi.Op>) -> List<&2, Server.Tool>:  # noqa: L001 example program, no law's subject
+def tools(ops: List<&2, Openapi.Op>) -> List<&2, Server.Tool>:
   match ops:
     case []:
       []
@@ -32,7 +32,7 @@ def tools(ops: List<&2, Openapi.Op>) -> List<&2, Server.Tool>:  # noqa: L001 exa
       Openapi.tool(one) <> tools(rest)
 
 # the server and its operations, as the runner is given them
-type Api is Data:  # noqa: L001 example program, no law's subject
+type Api is Data:
   Api{srv: Server.Server, ops: List<&2, Openapi.Op>}
 
 def api.of(+doc: Value.Json) -> Api:
@@ -41,7 +41,7 @@ def api.of(+doc: Value.Json) -> Api:
     tools(ops)), ops}
 
 # the server and operations of the document above
-def api() -> Api:  # noqa: L001 example program, no law's subject
+def api() -> Api:
   api.of(Maybe.default(&2, Value.Json, Json.parse(doc.text()), Json.null()))
 
 def api.srv(got: Api) -> Server.Server:
@@ -50,7 +50,7 @@ def api.srv(got: Api) -> Server.Server:
       srv
 
 # the fields as a request head writes them, one to a line
-def headers(hs: List<&2, Http.Header>) -> String:  # noqa: L001 example program, no law's subject
+def headers(hs: List<&2, Http.Header>) -> String:
   match hs:
     case []:
       ""
@@ -58,7 +58,7 @@ def headers(hs: List<&2, Http.Header>) -> String:  # noqa: L001 example program,
       "\n" ++ name ++ ": " ++ value ++ headers(rest)
 
 # the body after a blank line, if there is one
-def body(got: Maybe<&2, String>) -> String:  # noqa: L001 example program, no law's subject
+def body(got: Maybe<&2, String>) -> String:
   match got:
     case None{}:
       ""
@@ -67,7 +67,7 @@ def body(got: Maybe<&2, String>) -> String:  # noqa: L001 example program, no la
 
 # a request as HTTP/1.1 writes its head: the request line, the fields, the
 # body
-def shown(sent: Openapi.Call) -> String:  # noqa: L001 example program, no law's subject
+def shown(sent: Openapi.Call) -> String:
   match sent:
     case Openapi.Send{method, target, hs, got}:
       method ++ " " ++ target ++ headers(hs) ++ body(got)
@@ -75,7 +75,7 @@ def shown(sent: Openapi.Call) -> String:  # noqa: L001 example program, no law's
       "unfilled: " ++ path
 
 # this operation when it is the one, else what the rest have
-def found(  # noqa: L001 example program, no law's subject
+def found(
   hit: Bool,
   +one: Openapi.Op,
   rest: Maybe<&2, Openapi.Op>
@@ -87,7 +87,7 @@ def found(  # noqa: L001 example program, no law's subject
       rest
 
 # the operation of this name, if there is one
-def find(  # noqa: L001 example program, no law's subject
+def find(
   ops: List<&2, Openapi.Op>,
   +name: String
 ) -> Maybe<&2, Openapi.Op>:
@@ -98,7 +98,7 @@ def find(  # noqa: L001 example program, no law's subject
       found(String.eq(Openapi.name(one), name), one, find(rest, name))
 
 # a refusal when the arguments do not fit, else the request
-def checked(  # noqa: L001 example program, no law's subject
+def checked(
   +one: Openapi.Op,
   +args: Value.Json,
   why: Maybe<&2, String>
@@ -110,7 +110,7 @@ def checked(  # noqa: L001 example program, no law's subject
       Mcp.ok(Mcp.result.text(shown(Openapi.call(one, args))))
 
 # the answer to a call of this operation, or of none
-def answer(+args: Value.Json, got: Maybe<&2, Openapi.Op>) -> Rpc.Out:  # noqa: L001 example program, no law's subject
+def answer(+args: Value.Json, got: Maybe<&2, Openapi.Op>) -> Rpc.Out:
   match got:
     case None{}:
       Mcp.refuse.params("no such operation")
@@ -118,19 +118,19 @@ def answer(+args: Value.Json, got: Maybe<&2, Openapi.Op>) -> Rpc.Out:  # noqa: L
       checked(one, args, Openapi.check(one, args))
 
 # a tool call: the request it stands for, or a refusal
-def run(got: Api, +name: String, +args: Value.Json) -> IO(Rpc.Out):  # noqa: L001 example program, no law's subject
+def run(got: Api, +name: String, +args: Value.Json) -> IO(Rpc.Out):
   match got:
     case Api{srv, ops}:
       IO.pure(Rpc.Out, answer(args, find(ops, name)))
 
 # print the reply to one call
-def call(+name: String, text: String) -> IO(Unit):  # noqa: L001 example program, no law's subject
+def call(+name: String, text: String) -> IO(Unit):
   IO.bind(Rpc.Out, Unit, run(api(), name, Maybe.default(&2, Value.Json,
     Json.parse(text), Json.obj([]))),
     out => IO.print(Json.print(Server.ran("2025-06-18", Json.num("1"), out))))
 
 # the mode the arguments name
-@unsafe def mode(args: List<String>) -> IO(Unit):  # noqa: L001 example program, no law's subject
+@unsafe def mode(args: List<String>) -> IO(Unit):
   match args:
     case _prog <> "list" <> _more:
       IO.print(Json.print(Server.list(api.srv(api()))))
@@ -144,5 +144,5 @@ def call(+name: String, text: String) -> IO(Unit):  # noqa: L001 example program
     case other:
       IO.print_err("usage: openapi list | openapi call NAME ARGS | openapi http PORT N")
 
-@unsafe def main() -> IO(Unit):  # noqa: L001 example program, no law's subject
+@unsafe def main() -> IO(Unit):
   IO.bind(List<String>, Unit, IO.args(), mode)
