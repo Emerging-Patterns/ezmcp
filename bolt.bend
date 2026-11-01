@@ -32,7 +32,3 @@ def closed() -> String:
 # an @unsafe def a law file reaches
 def unsafe() -> String:
   "error"
-
-# SPEC.md's rows and the laws' tags agree
-def trace() -> String:
-  "error"

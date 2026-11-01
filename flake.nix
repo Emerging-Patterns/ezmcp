@@ -48,7 +48,7 @@
             # then examples/openapi lists a document's tools, turns calls into
             # requests and serves them with serve_from;
             # then examples/client runs a session against it. A smoke run, not
-            # evidence for any SPEC.md row.
+            # evidence for any guarantee.
             smoke = pkgs.runCommand "ezmcp-smoke" {
               nativeBuildInputs = [ bend llvm.clang pkgs.curl ];
               BEND_LIB = ez.bendLib ./ez.lock.toml;

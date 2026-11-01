@@ -265,18 +265,23 @@ bodies.
 
 ## Guarantees
 
-[SPEC.md](SPEC.md) lists every behavior ezmcp guarantees, each a requirement
-of MCP 2025-03-26, 2025-06-18 or 2025-11-25, or of JSON-RPC 2.0, cited by
-section, either proved by a
-quantified law in `LAWS.bend` or named as a trusted assumption. A row marked
-pending is not guaranteed yet. Its last table lists the revisions'
-requirements for what ezmcp does not implement: resources, prompts, logging,
-completions, sampling, elicitation, roots, progress, cancellation, SSE
-streams on the server, sessions, pagination and authorization.
+Every behavior ezmcp guarantees is a file under [laws/](laws/), each a
+requirement of MCP 2025-03-26, 2025-06-18 or 2025-11-25, or of JSON-RPC 2.0,
+cited by section in its prose and proved by its quantified laws, which the
+file of the same name under [proofs/](proofs/) fills.
+[LAWS.bend](LAWS.bend) imports them all and opens with what they cover. A
+guarantee whose prose says it is pending is not guaranteed yet. What ezmcp
+cannot prove (its IO sequencing, the stdin effect, the runner, its
+dependencies) is said on the code that assumes it, as a
+`# Trusted, not proved:` comment. [docs/SPEC.md](docs/SPEC.md), the table
+these files replaced, keeps the list of the revisions' requirements for
+what ezmcp does not implement: resources, prompts, logging, completions,
+sampling, elicitation, roots, progress, cancellation, SSE streams on the
+server, sessions, pagination and authorization.
 
 `nix flake check` runs the proof gate (`bend PROOF.bend` must print exactly
 `ALL PROOFS CHECK` first), a smoke run of the examples on the C lane, and
-bolt, whose `trace` rule checks that SPEC.md and the laws agree and whose
+bolt, whose `closed` rule rejects a law with no binder and whose
 `coverage` rule, an error, checks that a law reaches every def. A def no law
 can reach (a re-export in `main.bend`, a closed constant, a def only
 `src/io.bend` calls, an example's) carries a `# noqa: L001` naming why.

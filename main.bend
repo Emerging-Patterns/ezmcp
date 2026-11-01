@@ -68,6 +68,20 @@ def batch.reply(replies: List<&2, Maybe<&2, Value.Json>>) -> Maybe<&2, Value.Jso
   Server.batch.reply(replies)
 
 # --- what a runner answers ---
+#
+# Trusted, not proved: the runner validates its inputs and answers a tool
+# result or a protocol error. `server/tools#security-considerations`:
+# "Servers **MUST**: Validate all tool inputs; Implement proper access
+# controls; Rate limit tool invocations; Sanitize tool outputs." ezmcp
+# checks that the tool exists and that its arguments are an object
+# (laws/KnownToolCallsRun.bend, laws/UnknownToolsRefused.bend,
+# laws/BadToolArgumentsRefused.bend); validating the arguments against the
+# input schema, access control, rate limits and the tool's output are the
+# runner's, which answers `ok` of a `CallToolResult` (built with `result`,
+# `result.text`, `result.error` or `result.json`), or `refuse` with a
+# protocol error, choosing between the two as `server/tools#error-handling`
+# describes for the revision. It is the caller's code, which ezmcp does not
+# see.
 
 # a runner's answer for a tool that ran: its tool result, which may itself
 # report a failure with `isError` (`result.error`)

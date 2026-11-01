@@ -68,7 +68,7 @@ def took(+status: U32, ctype: String, text: String) -> Rpc.Reply:
   took.ok(ctype, text, U32.is_eq(status, 200), status)
 
 # whether an HTTP reply to a notification accepted it: any 2xx
-def accepted(+status: U32) -> Bool:  # noqa: L001 only src/io.bend calls it (MCP-TRUST-1)
+def accepted(+status: U32) -> Bool:  # noqa: L001 only src/io.bend calls it (trusted in src/io.bend)
   Bool.and(U32.is_ge(status, 200), U32.is_lt(status, 300))
 
 # the revision an initialize result names, "" when it names none
