@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/Emerging-Patterns/ezmcp/compare/v0.1.0...v0.2.0) (2026-11-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* the type `Server.Tool` and its constructor `Tool{...}` are renamed `Server.ToolSpec` and `ToolSpec{...}`. ezmcp now imports ezhttp at 2b918f5 (0x7367809738fddd234b8d2bed772ad2cf) instead of cab153b.
+
+### Features
+
+* **nix:** build and check on x86_64-linux, aarch64-linux and aarch64-darwin ([#15](https://github.com/Emerging-Patterns/ezmcp/issues/15)) ([c8d39ce](https://github.com/Emerging-Patterns/ezmcp/commit/c8d39cebc58c7a967d4b22f0dd8fd97e60f23c45))
+* rename Server.Tool to Server.ToolSpec, so ezmcp checks on bend 2.0.40 ([#18](https://github.com/Emerging-Patterns/ezmcp/issues/18)) ([d817402](https://github.com/Emerging-Patterns/ezmcp/commit/d8174023acb36b15d5443e64d678df9a1c43951f))
+
 ## 0.1.0 (2026-10-27)
 
 
