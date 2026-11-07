@@ -20,8 +20,8 @@ law known_named:
   for name: String
   for description: String
   for input: Value.Json
-  for rest: List<&2, Server.Tool>
-  {Server.known(Server.Tool{name, description, input} <> rest, name)
+  for rest: List<&2, Server.ToolSpec>
+  {Server.known(Server.ToolSpec{name, description, input} <> rest, name)
     == True{} : Bool}
 
 # LAW: a call of a known tool with object arguments runs it on them
@@ -47,7 +47,7 @@ law call_named:
   for description: String
   for version: String
   for instructions: String
-  for tools: List<&2, Server.Tool>
+  for tools: List<&2, Server.ToolSpec>
   for params: Value.Json
   for n: String
   for e: {Json.as_str(Json.get(params, "name")) == Some{n} : Maybe<&2, String>}

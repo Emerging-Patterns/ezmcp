@@ -34,11 +34,11 @@ values. Build them with the ezjson ezmcp is locked to (v1.2.0), so the two
 agree on the type: `ez add Emerging-Patterns/ezjson v1.2.0`.
 
 ezmcp imports its dependencies by hash: ezjson v1.2.0
-(`0xa81e161008ecc2f297c0a3065cb9b188`) and ezhttp at `cab153b`
-(`0xedb2120a04a47dc18c3a756ec7c62750`). A project that uses ezhttp too
-shares one copy with ezmcp only when it adds the same commit
-(`ez add https://github.com/Emerging-Patterns/ezhttp cab153b2bf4308127f454d8e204e6c85ae50aaaa`);
-any other commit is a second
+(`0xa81e161008ecc2f297c0a3065cb9b188`) and ezhttp v0.23.0
+(`ezhttp@0.23.0.0`, `0x7367809738fddd234b8d2bed772ad2cf`). A project that
+uses ezhttp too shares one copy with ezmcp only when it adds the same release
+(`ez add Emerging-Patterns/ezhttp v0.23.0`);
+any other release is a second
 package in its lock and its binary, and ezmcp's server runs on the one
 ezmcp names. ez has no override or version range that redirects a
 dependency's `0x` import, so the way to one copy is to keep the two
@@ -138,7 +138,7 @@ endpoint in an ezhttp server that serves other paths too, hand requests to
 
 | Name | Type | What it does |
 | :---- | :---- | :---- |
-| `tool(name, description, input_schema)` | `Server.Tool` | a tool table entry |
+| `tool(name, description, input_schema)` | `Server.ToolSpec` | a tool table entry |
 | `ok(result)` | `Rpc.Out` | a runner's answer: this tool result |
 | `refuse(code, message)` | `Rpc.Out` | a runner's answer: this JSON-RPC error, not a tool result |
 | `refuse.params(message)` | `Rpc.Out` | refuse with -32602 Invalid params |

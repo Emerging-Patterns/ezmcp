@@ -28,7 +28,3 @@ def coverage() -> String:
 # a law with no binder
 def closed() -> String:
   "error"
-
-# an @unsafe def a law file reaches
-def unsafe() -> String:
-  "error"

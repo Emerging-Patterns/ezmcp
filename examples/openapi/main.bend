@@ -12,7 +12,7 @@
 import Base
 import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
-import 0xedb2120a04a47dc18c3a756ec7c62750/src/http.bend as Http
+import 0x7367809738fddd234b8d2bed772ad2cf/src/http.bend as Http
 import ../../main.bend as Mcp
 import ../../src/server.bend as Server
 import ../../src/rpc.bend as Rpc
@@ -24,7 +24,7 @@ def doc.text() -> String:
   "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"pets\",\"version\":\"1.0.0\"},\"paths\":{\"/pets/{pet_id}\":{\"parameters\":[{\"name\":\"pet_id\",\"in\":\"path\",\"required\":true,\"schema\":{\"type\":\"integer\"}}],\"get\":{\"operationId\":\"get_pet\",\"summary\":\"One pet\",\"parameters\":[{\"name\":\"fields\",\"in\":\"query\",\"schema\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},{\"name\":\"X-Trace\",\"in\":\"header\",\"schema\":{\"type\":\"string\"}}]},\"put\":{\"operationId\":\"pets.update\",\"description\":\"Update a pet\",\"requestBody\":{\"required\":true,\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/Pet\"}}}}}},\"/pets\":{\"post\":{\"requestBody\":{\"content\":{\"text/plain\":{}}}}}},\"components\":{\"schemas\":{\"Pet\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\",\"nullable\":true},\"age\":{\"type\":\"integer\",\"example\":3}},\"required\":[\"name\"]}}}}"
 
 # each operation's tool
-def tools(ops: List<&2, Openapi.Op>) -> List<&2, Server.Tool>:
+def tools(ops: List<&2, Openapi.Op>) -> List<&2, Server.ToolSpec>:
   match ops:
     case []:
       []
