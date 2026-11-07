@@ -34,11 +34,11 @@ values. Build them with the ezjson ezmcp is locked to (v1.2.0), so the two
 agree on the type: `ez add Emerging-Patterns/ezjson v1.2.0`.
 
 ezmcp imports its dependencies by hash: ezjson v1.2.0
-(`0xa81e161008ecc2f297c0a3065cb9b188`) and ezhttp at `2b918f5`
-(`0x7367809738fddd234b8d2bed772ad2cf`). A project that uses ezhttp too
-shares one copy with ezmcp only when it adds the same commit
-(`ez add https://github.com/Emerging-Patterns/ezhttp 2b918f5d0f90593f4c26bf3f359484e39712e96c`);
-any other commit is a second
+(`0xa81e161008ecc2f297c0a3065cb9b188`) and ezhttp v0.23.0
+(`ezhttp@0.23.0.0`, `0x7367809738fddd234b8d2bed772ad2cf`). A project that
+uses ezhttp too shares one copy with ezmcp only when it adds the same release
+(`ez add Emerging-Patterns/ezhttp v0.23.0`);
+any other release is a second
 package in its lock and its binary, and ezmcp's server runs on the one
 ezmcp names. ez has no override or version range that redirects a
 dependency's `0x` import, so the way to one copy is to keep the two
