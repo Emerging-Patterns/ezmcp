@@ -63,7 +63,7 @@ A tag may name a proved or a pending requirement, never a Trusted one or an ID n
 
 ### Tools (MCP-TOOL)
 
-`server/tools`. A tool is a name, a description and an input schema (`Server.Tool`); a server's tools are a table in a fixed order. A `tools/call` that names a known tool with valid arguments ends as a `Run` for the transport, which hands the name and the arguments to the server's runner and replies with `ran` of what the runner answers: `Rpc.Ok` of a tool result, or `Rpc.Err` of a JSON-RPC error it chose.
+`server/tools`. A tool is a name, a description and an input schema (`Server.ToolSpec`); a server's tools are a table in a fixed order. A `tools/call` that names a known tool with valid arguments ends as a `Run` for the transport, which hands the name and the arguments to the server's runner and replies with `ran` of what the runner answers: `Rpc.Ok` of a tool result, or `Rpc.Err` of a JSON-RPC error it chose.
 
 | ID | Requirement | Level | Status | Law |
 | :---- | :---- | :---- | :---- | :---- |

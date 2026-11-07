@@ -27,7 +27,7 @@ law init_info:
   for name: String
   for version: String
   for +instructions: String
-  for tools: List<&2, Server.Tool>
+  for tools: List<&2, Server.ToolSpec>
   for params: Value.Json
   {Json.get(Server.init(Server.Server{name, version, instructions, tools},
     params), "serverInfo")
@@ -39,7 +39,7 @@ law init_instructions:
   for name: String
   for version: String
   for +instructions: String
-  for tools: List<&2, Server.Tool>
+  for tools: List<&2, Server.ToolSpec>
   for params: Value.Json
   for e: {String.is_empty(instructions) == False{} : Bool}
   {Json.get(Server.init(Server.Server{name, version, instructions, tools},
@@ -50,7 +50,7 @@ law init_no_instructions:
   for name: String
   for version: String
   for +instructions: String
-  for tools: List<&2, Server.Tool>
+  for tools: List<&2, Server.ToolSpec>
   for params: Value.Json
   for e: {String.is_empty(instructions) == True{} : Bool}
   {Json.has(Server.init(Server.Server{name, version, instructions, tools},

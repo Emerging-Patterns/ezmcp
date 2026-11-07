@@ -9,14 +9,14 @@ import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
 import ./rpc.bend as Rpc
 
 # one tool: its name, what it does, and the JSON Schema of its arguments
-type Tool is Data:
-  Tool{name: String, description: String, input: Value.Json}
+type ToolSpec is Data:
+  ToolSpec{name: String, description: String, input: Value.Json}
 
 # a server: its name and version, instructions for the client (empty for
 # none), and its tools
 type Server is Data:
   Server{name: String, version: String, instructions: String,
-    tools: List<&2, Tool>}
+    tools: List<&2, ToolSpec>}
 
 # what a server does with one message; a Batch's acts are its elements',
 # in order, and none of them is a Batch
@@ -113,7 +113,7 @@ def session(rev: String, msg: Rpc.Msg) -> String:
 
 # the capabilities a tool table declares: tools when there is one, with
 # listChanged false, since the table never changes
-def capabilities(tools: List<&2, Tool>) -> Value.Json:
+def capabilities(tools: List<&2, ToolSpec>) -> Value.Json:
   match tools:
     case []:
       Json.obj([])
@@ -156,13 +156,13 @@ def init(srv: Server, params: Value.Json) -> Value.Json:
 # --- tools ---
 
 # one tool as tools/list shows it (server/tools#tool)
-def tool.json(tail: Tool) -> Value.Json:
+def tool.json(tail: ToolSpec) -> Value.Json:
   match tail:
-    case Tool{name, description, input}:
+    case ToolSpec{name, description, input}:
       Json.obj([("name", Json.str(name)), ("description", Json.str(description)),
         ("inputSchema", input)])
 
-def tool.all(tools: List<&2, Tool>) -> List<&2, Value.Json>:
+def tool.all(tools: List<&2, ToolSpec>) -> List<&2, Value.Json>:
   match tools:
     case []:
       []
@@ -184,11 +184,11 @@ def known.or(hit: Bool, rest: Unit -> Bool) -> Bool:
       rest(Unit{})
 
 # whether a tool table has a tool by this name
-def known(tools: List<&2, Tool>, +name: String) -> Bool:
+def known(tools: List<&2, ToolSpec>, +name: String) -> Bool:
   match tools:
     case []:
       False{}
-    case Tool{tname, _desc, _input} <> rest:
+    case ToolSpec{tname, _desc, _input} <> rest:
       known.or(String.eq(tname, name), _u => known(rest, name))
 
 # an invalid-params outcome
@@ -214,7 +214,7 @@ def call.known(+name: String, +params: Value.Json, hit: Bool) -> Step:
         Json.get(params, "arguments"))
 
 def call.named(
-  tools: List<&2, Tool>,
+  tools: List<&2, ToolSpec>,
   +params: Value.Json,
   name: Maybe<&2, String>
 ) -> Step:

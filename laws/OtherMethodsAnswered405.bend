@@ -5,7 +5,7 @@
 # 405". Every method but POST (GET and DELETE included) at the endpoint,
 # with an allowed Origin, is answered 405 with `Allow: POST` and no body
 import Base
-import 0xedb2120a04a47dc18c3a756ec7c62750/src/http.bend as Http
+import 0x7367809738fddd234b8d2bed772ad2cf/src/http.bend as Http
 import ../src/server.bend as Server
 import ../src/web.bend as Web
 

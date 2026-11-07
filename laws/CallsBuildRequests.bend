@@ -22,8 +22,8 @@
 import Base
 import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
-import 0xedb2120a04a47dc18c3a756ec7c62750/src/http.bend as Http
-import 0xedb2120a04a47dc18c3a756ec7c62750/src/qs.bend as Qs
+import 0x7367809738fddd234b8d2bed772ad2cf/src/http.bend as Http
+import 0x7367809738fddd234b8d2bed772ad2cf/src/qs.bend as Qs
 import ../src/openapi.bend as Openapi
 
 # LAW: a call is its parameters put in the request, and its body

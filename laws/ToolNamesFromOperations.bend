@@ -61,7 +61,7 @@ law oas_tool:
   for params: List<&2, Openapi.Param>
   for media: String
   {Openapi.tool(Openapi.Op{name, description, input, method, path, params,
-    media}) == Server.Tool{name, description, input} : Server.Tool}
+    media}) == Server.ToolSpec{name, description, input} : Server.ToolSpec}
 
 # LAW: an operation's name is its tool's
 law oas_name:

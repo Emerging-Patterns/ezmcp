@@ -1,5 +1,5 @@
 # `server/tools`. A tool is a name, a description and an input schema
-# (`Server.Tool`); a server's tools are a table in a fixed order. A
+# (`Server.ToolSpec`); a server's tools are a table in a fixed order. A
 # `tools/call` that names a known tool with valid arguments ends as a `Run`
 # for the transport, which hands the name and the arguments to the server's
 # runner and replies with `ran` of what the runner answers: `Rpc.Ok` of a
@@ -29,14 +29,14 @@ law list_items:
   for name: String
   for version: String
   for instructions: String
-  for tools: List<&2, Server.Tool>
+  for tools: List<&2, Server.ToolSpec>
   {Json.items(Json.get(Server.list(Server.Server{name, version, instructions,
     tools}), "tools")) == Server.tool.all(tools) : List<&2, Value.Json>}
 
 # LAW: the list shows each tool by its own description
 law list_each:
-  for t: Server.Tool
-  for rest: List<&2, Server.Tool>
+  for t: Server.ToolSpec
+  for rest: List<&2, Server.ToolSpec>
   {Server.tool.all(t <> rest) == Server.tool.json(t) <> Server.tool.all(rest)
     : List<&2, Value.Json>}
 
@@ -45,7 +45,7 @@ law tool_fields:
   for name: String
   for description: String
   for input: Value.Json
-  {Server.tool.json(Server.Tool{name, description, input})
+  {Server.tool.json(Server.ToolSpec{name, description, input})
     == Json.obj([("name", Json.str(name)),
       ("description", Json.str(description)), ("inputSchema", input)])
     : Value.Json}

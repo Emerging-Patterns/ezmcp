@@ -10,7 +10,7 @@
 # types src/server.bend, src/rpc.bend and src/web.bend name.
 import Base
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
-import 0xedb2120a04a47dc18c3a756ec7c62750/src/http.bend as Http
+import 0x7367809738fddd234b8d2bed772ad2cf/src/http.bend as Http
 import ./src/rpc.bend as Rpc
 import ./src/server.bend as Server
 import ./src/web.bend as Web
@@ -22,8 +22,8 @@ import ./src/openapi.bend as Openapi
 
 # a tool: its name, a description for the model, and the JSON Schema of its
 # arguments (an object schema)
-def tool(name: String, description: String, input: Value.Json) -> Server.Tool:  # noqa: L001 the Server.Tool constructor
-  Server.Tool{name, description, input}
+def tool(name: String, description: String, input: Value.Json) -> Server.ToolSpec:  # noqa: L001 ToolSpec constructor
+  Server.ToolSpec{name, description, input}
 
 # a server: name and version (serverInfo), instructions for the client ("" for
 # none), and its tools in the order tools/list shows them
@@ -31,7 +31,7 @@ def server(  # noqa: L001 the Server.Server constructor
   name: String,
   version: String,
   instructions: String,
-  tools: List<&2, Server.Tool>
+  tools: List<&2, Server.ToolSpec>
 ) -> Server.Server:
   Server.Server{name, version, instructions, tools}
 
@@ -315,7 +315,7 @@ def openapi.ops(doc: Value.Json) -> List<&2, Openapi.Op>:
   Openapi.ops(doc)
 
 # an operation's tool: its name, description and input schema
-def openapi.tool(op: Openapi.Op) -> Server.Tool:
+def openapi.tool(op: Openapi.Op) -> Server.ToolSpec:
   Openapi.tool(op)
 
 # an operation's tool name: its operationId as a tool name

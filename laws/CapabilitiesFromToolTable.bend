@@ -15,20 +15,20 @@ law init_caps:
   for name: String
   for version: String
   for +instructions: String
-  for tools: List<&2, Server.Tool>
+  for tools: List<&2, Server.ToolSpec>
   for params: Value.Json
   {Json.get(Server.init(Server.Server{name, version, instructions, tools},
     params), "capabilities") == Server.capabilities(tools) : Value.Json}
 
 # LAW: a server with tools declares the tools capability, listChanged false
 law caps_tools:
-  for t: Server.Tool
-  for rest: List<&2, Server.Tool>
+  for t: Server.ToolSpec
+  for rest: List<&2, Server.ToolSpec>
   {Json.get(Server.capabilities(t <> rest), "tools")
     == Json.obj([("listChanged", Json.bool(False{}))]) : Value.Json}
 
 # LAW: a server with no tools declares no capability
 law caps_none:
-  for tools: List<&2, Server.Tool>
-  for e: {List.is_empty(&2, Server.Tool, tools) == True{} : Bool}
+  for tools: List<&2, Server.ToolSpec>
+  for e: {List.is_empty(&2, Server.ToolSpec, tools) == True{} : Bool}
   {Server.capabilities(tools) == Json.obj([]) : Value.Json}

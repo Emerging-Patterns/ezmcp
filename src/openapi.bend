@@ -12,9 +12,9 @@
 import Base
 import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
 import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
-import 0xedb2120a04a47dc18c3a756ec7c62750/src/http.bend as Http
-import 0xedb2120a04a47dc18c3a756ec7c62750/src/pct.bend as Pct
-import 0xedb2120a04a47dc18c3a756ec7c62750/src/qs.bend as Qs
+import 0x7367809738fddd234b8d2bed772ad2cf/src/http.bend as Http
+import 0x7367809738fddd234b8d2bed772ad2cf/src/pct.bend as Pct
+import 0x7367809738fddd234b8d2bed772ad2cf/src/qs.bend as Qs
 import ./server.bend as Server
 
 # where a parameter goes (Parameter Object `in`); InNone for a location
@@ -1044,10 +1044,10 @@ def ops(+doc: Value.Json) -> List<&2, Op>:
   paths(members(Json.get(doc, "paths")), doc)
 
 # an operation's tool
-def tool(oper: Op) -> Server.Tool:
+def tool(oper: Op) -> Server.ToolSpec:
   match oper:
     case Op{name, description, input, method, path, params, media}:
-      Server.Tool{name, description, input}
+      Server.ToolSpec{name, description, input}
 
 # an operation's tool name
 def name(oper: Op) -> String:
