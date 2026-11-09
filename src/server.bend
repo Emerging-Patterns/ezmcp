@@ -4,8 +4,8 @@
 # run (src/io.bend) before it replies with `ran`, or, under 2025-03-26, a
 # batch of those.
 import Base
-import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
-import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
+import ezjson@1.2.0.0/main.bend as Json
+import ezjson@1.2.0.0/src/value.bend as Value
 import ./rpc.bend as Rpc
 
 # one tool: its name, what it does, and the JSON Schema of its arguments

@@ -9,8 +9,8 @@
 # the whole public interface; everything under src/ is internal, except the
 # types src/server.bend, src/rpc.bend and src/web.bend name.
 import Base
-import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
-import 0x7367809738fddd234b8d2bed772ad2cf/src/http.bend as Http
+import ezjson@1.2.0.0/src/value.bend as Value
+import ezhttp@0.23.0.0/src/http.bend as Http
 import ./src/rpc.bend as Rpc
 import ./src/server.bend as Server
 import ./src/web.bend as Web

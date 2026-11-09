@@ -11,8 +11,8 @@
 # the sum of two integers as structured content, or a tool error when they
 # are not integers, which the model can correct.
 import Base
-import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
-import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
+import ezjson@1.2.0.0/main.bend as Json
+import ezjson@1.2.0.0/src/value.bend as Value
 import ../../main.bend as Mcp
 import ../../src/server.bend as Server
 import ../../src/rpc.bend as Rpc

@@ -3,8 +3,8 @@
 # `result.json(v)` has `structuredContent` exactly `v`, and `content`
 # exactly one text block holding `v`'s JSON text
 import Base
-import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
-import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
+import ezjson@1.2.0.0/main.bend as Json
+import ezjson@1.2.0.0/src/value.bend as Value
 import ../src/server.bend as Server
 
 # LAW: structured content is the value itself

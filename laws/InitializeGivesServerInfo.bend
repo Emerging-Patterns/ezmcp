@@ -10,8 +10,8 @@
 # (schema.json `Implementation`), with `instructions` when the server has
 # non-empty instructions and with no `instructions` member when it has none
 import Base
-import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
-import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
+import ezjson@1.2.0.0/main.bend as Json
+import ezjson@1.2.0.0/src/value.bend as Value
 import ../src/rpc.bend as Rpc
 import ../src/server.bend as Server
 

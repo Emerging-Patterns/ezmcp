@@ -1,6 +1,6 @@
 # proofs of laws/ClientPostHeaders.bend
 import Base
-import 0x7367809738fddd234b8d2bed772ad2cf/src/http.bend as Http
+import ezhttp@0.23.0.0/src/http.bend as Http
 import ../laws/ClientPostHeaders.bend as Laws
 
 def Laws.headers_first(v, e):

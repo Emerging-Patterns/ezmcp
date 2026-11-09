@@ -1,6 +1,6 @@
 # proofs of laws/StructuredResultsCarryText.bend
 import Base
-import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
+import ezjson@1.2.0.0/main.bend as Json
 import ../src/server.bend as Server
 import ../laws/StructuredResultsCarryText.bend as Laws
 import ./lemmas/ArrayItemsRoundTrip.bend as M1
