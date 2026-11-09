@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/Emerging-Patterns/ezmcp/compare/v0.2.0...v0.3.0) (2026-11-09)
+
+
+### Bug Fixes
+
+* **deps:** import ezjson and ezhttp by hub name ([#20](https://github.com/Emerging-Patterns/ezmcp/issues/20)) ([fb7176c](https://github.com/Emerging-Patterns/ezmcp/commit/fb7176c7e17179aefcfca88869c5cbdbb6c0bef0))
+
 ## [0.2.0](https://github.com/Emerging-Patterns/ezmcp/compare/v0.1.0...v0.2.0) (2026-11-07)
 
 
