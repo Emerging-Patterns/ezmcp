@@ -4,8 +4,8 @@
 # whose text is an integer (JSON-RPC §5.1's -32700, -32600, -32601, -32602,
 # -32603)
 import Base
-import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
-import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
+import ezjson@1.2.0.0/main.bend as Json
+import ezjson@1.2.0.0/src/value.bend as Value
 import ../src/rpc.bend as Rpc
 
 # LAW: an error's code is a number whose text is an integer

@@ -6,9 +6,9 @@
 # answered 400 with its JSON-RPC error as the body; an HTTP request that
 # does not parse is answered 400
 import Base
-import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
-import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
-import 0x7367809738fddd234b8d2bed772ad2cf/src/http.bend as Http
+import ezjson@1.2.0.0/main.bend as Json
+import ezjson@1.2.0.0/src/value.bend as Value
+import ezhttp@0.23.0.0/src/http.bend as Http
 import ../src/server.bend as Server
 import ../src/web.bend as Web
 

@@ -48,12 +48,12 @@
 # requests (it issues no session), so connections served at once share only
 # the context, which nothing changes.
 import Base
-import 0xa81e161008ecc2f297c0a3065cb9b188/main.bend as Json
-import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
-import 0x7367809738fddd234b8d2bed772ad2cf/main.bend as Ez
-import 0x7367809738fddd234b8d2bed772ad2cf/src/http.bend as Http
-import 0x7367809738fddd234b8d2bed772ad2cf/src/client.bend as EzClient
-import 0x7367809738fddd234b8d2bed772ad2cf/src/server.bend as EzServer
+import ezjson@1.2.0.0/main.bend as Json
+import ezjson@1.2.0.0/src/value.bend as Value
+import ezhttp@0.23.0.0/main.bend as Ez
+import ezhttp@0.23.0.0/src/http.bend as Http
+import ezhttp@0.23.0.0/src/client.bend as EzClient
+import ezhttp@0.23.0.0/src/server.bend as EzServer
 import ./rpc.bend as Rpc
 import ./server.bend as Server
 import ./web.bend as Web

@@ -4,7 +4,7 @@
 # response, and a server's act on it is to send nothing (ezmcp sends no
 # requests, so it awaits none)
 import Base
-import 0xa81e161008ecc2f297c0a3065cb9b188/src/value.bend as Value
+import ezjson@1.2.0.0/src/value.bend as Value
 import ../src/rpc.bend as Rpc
 import ../src/server.bend as Server
 
