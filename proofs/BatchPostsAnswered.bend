@@ -1,6 +1,6 @@
 # proofs of laws/BatchPostsAnswered.bend
 import Base
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/src/value.bend as Value
 import ../src/server.bend as Server
 import ../src/web.bend as Web
 import ../laws/BatchPostsAnswered.bend as Laws

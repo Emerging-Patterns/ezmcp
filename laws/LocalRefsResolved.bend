@@ -11,8 +11,8 @@
 # is `{"type": "object"}`; a reference that is not local or does not resolve
 # leaves the object as it is
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
 import ../src/openapi.bend as Openapi
 
 # LAW: `~1` is `/`

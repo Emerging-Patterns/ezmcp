@@ -1,6 +1,6 @@
 # proofs of laws/BadToolArgumentsRefused.bend
 import Base
-import ezjson@1.2.0.0/main.bend as Json
+import ezjson@1.5.0.0/main.bend as Json
 import ../src/rpc.bend as Rpc
 import ../src/server.bend as Server
 import ../laws/BadToolArgumentsRefused.bend as Laws

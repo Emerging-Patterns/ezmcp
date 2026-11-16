@@ -3,8 +3,8 @@
 # boolean, an array, an object, or a number that is not an integer) is an
 # invalid request whose error carries a null id; it is never dispatched
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
 import ../src/rpc.bend as Rpc
 
 # LAW: a value that is neither a string nor a number is no valid id: null,

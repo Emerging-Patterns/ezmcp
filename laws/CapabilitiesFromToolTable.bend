@@ -6,8 +6,8 @@
 # none. ezmcp declares no other capability and sends no message of its own,
 # so it uses none it did not declare
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
 import ../src/server.bend as Server
 
 # LAW: the result's capabilities are the tool table's

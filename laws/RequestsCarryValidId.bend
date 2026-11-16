@@ -10,7 +10,7 @@
 # (an optional `-`, then digits), is a request with exactly that id, method
 # and params, whatever else it holds
 import Base
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/src/value.bend as Value
 import ../src/rpc.bend as Rpc
 
 # LAW: an object with jsonrpc "2.0", a method and a valid id is a request

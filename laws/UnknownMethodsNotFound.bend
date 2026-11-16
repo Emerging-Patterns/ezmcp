@@ -3,7 +3,7 @@
 # for any method other than `initialize`, `ping`, `tools/list` and
 # `tools/call` ends with error -32601 `Method not found: <method>`
 import Base
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/src/value.bend as Value
 import ../src/rpc.bend as Rpc
 import ../src/server.bend as Server
 

@@ -1,8 +1,8 @@
 # proofs of laws/OldRevisionDropsStructuredContent.bend
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
-import ezjson@1.2.0.0/src/lazy.bend as Lazy
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/src/lazy.bend as Lazy
 import ../src/server.bend as Server
 import ../laws/OldRevisionDropsStructuredContent.bend as Laws
 

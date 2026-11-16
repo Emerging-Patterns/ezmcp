@@ -6,7 +6,7 @@
 # and `Accept: application/json, text/event-stream`, and, once a version is
 # negotiated (non-empty), `MCP-Protocol-Version` with it
 import Base
-import ezhttp@0.23.0.0/src/http.bend as Http
+import ezhttp@0.26.0.0/src/http.bend as Http
 import ../src/client.bend as Client
 
 # LAW: before initialize, a POST accepts JSON and event streams

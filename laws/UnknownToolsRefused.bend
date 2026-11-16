@@ -3,7 +3,7 @@
 # table has ends with error -32602 `Unknown tool: <name>`, the spec's own
 # example, and runs nothing
 import Base
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/src/value.bend as Value
 import ../src/rpc.bend as Rpc
 import ../src/server.bend as Server
 

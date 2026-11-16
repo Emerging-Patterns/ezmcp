@@ -10,11 +10,11 @@
 # The OpenAPI guarantees under laws/ (laws/OperationsFromPaths.bend first)
 # state what is guaranteed.
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
-import ezhttp@0.23.0.0/src/http.bend as Http
-import ezhttp@0.23.0.0/src/pct.bend as Pct
-import ezhttp@0.23.0.0/src/qs.bend as Qs
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
+import ezhttp@0.26.0.0/src/http.bend as Http
+import ezhttp@0.26.0.0/src/pct.bend as Pct
+import ezhttp@0.26.0.0/src/qs.bend as Qs
 import ./server.bend as Server
 
 # where a parameter goes (Parameter Object `in`); InNone for a location
