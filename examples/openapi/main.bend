@@ -138,8 +138,7 @@ def call(+name: String, text: String) -> IO(Unit):
       call(name, text)
     case _prog <> "http" <> port <> count <> _more:
       Mcp.http.serve_from(~Api, ~api.srv, ~(c => n => a => run(c, n, a)), ~"/mcp",
-        ~[], api(), "127.0.0.1",
-        Maybe.default(&2, U32, U32.read(port), 8000),
+        ~[], api(), ("127.0.0.1", Maybe.default(&2, U32, U32.read(port), 8000)),
         Maybe.default(&2, U32, U32.read(count), 1), 0)
     case other:
       IO.print_err("usage: openapi list | openapi call NAME ARGS | openapi http PORT N")

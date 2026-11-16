@@ -104,7 +104,9 @@ def run(base: String, tool: String, args: Value.Json) -> IO(Rpc.Out):
 ```
 
 `Mcp.stdio.serve_with(~C, ~run, ~srv, ctx)`, `Mcp.http.serve_with` (for
-`limit` connections) and `Mcp.http.handle_with` do the same.
+`limit` connections, its address one `(host, port)` pair:
+`Mcp.http.serve_with(~String, ~run, ~srv(), ~"/mcp", ~[], base, ("127.0.0.1", 8000), limit, 0)`)
+and `Mcp.http.handle_with` do the same.
 
 A server built at run time, from a document read at startup say, cannot be
 a `~srv` either. The `_from` serves take the server from the context too,
@@ -115,8 +117,9 @@ Mcp.http.serve_forever_from(~Api, ~api.srv, ~run, ~"/mcp", ~[], api,
   "0.0.0.0", 3000, 0)
 ```
 
-`Mcp.http.serve_from` (for `limit` connections) and `Mcp.http.handle_from`
-do the same.
+`Mcp.http.serve_from` (for `limit` connections, its address one
+`(host, port)` pair as for `serve_with`) and `Mcp.http.handle_from` do the
+same.
 
 ### Connections at once
 
@@ -153,11 +156,11 @@ endpoint in an ezhttp server that serves other paths too, hand requests to
 | `http.decide(srv, path, origins, req)` | `Web.Web` | the transport's decision for one request, with no IO |
 | `stdio.serve(~run, ~srv)` | `IO(Unit)` | serve stdin and stdout until stdin ends (`@unsafe`) |
 | `http.serve_forever_with(~C, ~run, ~srv, ~path, ~origins, ctx, host, port, max)` | `IO(Unit)` | `http.serve_forever` with a runner `C -> String -> Json -> IO(Rpc.Out)` given `ctx`, at most `max` connections at once (0: no limit) (`@unsafe`) |
-| `http.serve_with(~C, ~run, ~srv, ~path, ~origins, ctx, host, port, limit, max)` | `IO(Unit)` | `http.serve` with a context, at most `max` connections at once |
+| `http.serve_with(~C, ~run, ~srv, ~path, ~origins, ctx, (host, port), limit, max)` | `IO(Unit)` | `http.serve` with a context, at most `max` connections at once |
 | `http.handle_with(~C, ~run, ~srv, ~path, ~origins, ctx, req)` | `IO(Http.Reply)` | `http.handle` with a context |
 | `stdio.serve_with(~C, ~run, ~srv, ctx)` | `IO(Unit)` | `stdio.serve` with a context (`@unsafe`) |
 | `http.serve_forever_from(~C, ~srv, ~run, ~path, ~origins, ctx, host, port, max)` | `IO(Unit)` | `http.serve_forever_with` with the server `srv(ctx)` (`@unsafe`) |
-| `http.serve_from(~C, ~srv, ~run, ~path, ~origins, ctx, host, port, limit, max)` | `IO(Unit)` | `http.serve_with` with the server `srv(ctx)` |
+| `http.serve_from(~C, ~srv, ~run, ~path, ~origins, ctx, (host, port), limit, max)` | `IO(Unit)` | `http.serve_with` with the server `srv(ctx)` |
 | `http.handle_from(~C, ~srv, ~run, ~path, ~origins, ctx, req)` | `IO(Http.Reply)` | `http.handle_with` with the server `srv(ctx)` |
 | `step(srv, rev, text)` | `Server.Act` | what a server does with one message read by revision `rev`, for a transport of your own |
 | `turn(srv, rev, text)` | `Server.Turn` | `step`'s act and the revision a stream's next message is read by |

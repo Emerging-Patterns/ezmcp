@@ -195,9 +195,10 @@ def http.handle_with(
 ) -> IO(Http.Reply):
   Io.http.handle_with(C, run, srv, path, origins, ctx, req)
 
-# serve the endpoint on host:port for `limit` connections, its runner given
-# `ctx`, each connection on its own fork and at most `max` at once (0: no
-# limit; 1: one at a time), then stop once every connection is closed
+# serve the endpoint on `addr`, (host, port), for `limit` connections, its
+# runner given `ctx`, each connection on its own fork and at most `max` at
+# once (0: no limit; 1: one at a time), then stop once every connection is
+# closed
 def http.serve_with(
   ~C: Data,
   ~run: C -> String -> Value.Json -> IO(Rpc.Out),
@@ -205,12 +206,11 @@ def http.serve_with(
   ~path: String,
   ~origins: List<&2, String>,
   +ctx: C,
-  host: String,
-  port: U32,
+  addr: String & U32,
   limit: U32,
   max: U32
 ) -> IO(Unit):
-  Io.http.serve_with(C, run, srv, path, origins, ctx, host, port, limit, max)
+  Io.http.serve_with(C, run, srv, path, origins, ctx, addr, limit, max)
 
 # serve the endpoint on host:port, its runner given `ctx`, each connection on
 # its own fork and at most `max` at once (0: no limit; 1: one at a time),
@@ -247,9 +247,9 @@ def http.handle_from(
 ) -> IO(Http.Reply):
   Io.http.web(C, run, ctx, Web.decide(srv(ctx), path, origins, req))
 
-# serve the endpoint on host:port for `limit` connections, its server and
-# runner given `ctx`, each connection on its own fork and at most `max` at
-# once (0: no limit), then stop once every connection is closed
+# serve the endpoint on `addr`, (host, port), for `limit` connections, its
+# server and runner given `ctx`, each connection on its own fork and at most
+# `max` at once (0: no limit), then stop once every connection is closed
 def http.serve_from(
   ~C: Data,
   ~srv: C -> Server.Server,
@@ -257,12 +257,11 @@ def http.serve_from(
   ~path: String,
   ~origins: List<&2, String>,
   +ctx: C,
-  host: String,
-  port: U32,
+  addr: String & U32,
   limit: U32,
   max: U32
 ) -> IO(Unit):
-  Io.http.serve_from(C, srv, run, path, origins, ctx, host, port, limit, max)
+  Io.http.serve_from(C, srv, run, path, origins, ctx, addr, limit, max)
 
 # serve the endpoint on host:port, its server and runner given `ctx`, each
 # connection on its own fork and at most `max` at once (0: no limit), until
