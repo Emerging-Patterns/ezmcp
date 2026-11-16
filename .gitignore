@@ -8,3 +8,4 @@ bin/
 .claude/
 examples/*/*
 !examples/*/*.bend
+.direnv/
