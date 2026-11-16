@@ -4,8 +4,8 @@
 # reply is error -32700 `Parse error` with a null id. Whether a text parses
 # as JSON is ezjson's `parse` (ezjson's laws/ParsesExactlyJsonTexts.bend)
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
 import ../src/rpc.bend as Rpc
 import ../src/server.bend as Server
 

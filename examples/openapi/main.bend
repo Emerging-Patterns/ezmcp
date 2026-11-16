@@ -10,9 +10,9 @@
 #   openapi http PORT N          POST /mcp on 127.0.0.1:PORT, for N
 #                                connections
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
-import ezhttp@0.23.0.0/src/http.bend as Http
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
+import ezhttp@0.26.0.0/src/http.bend as Http
 import ../../main.bend as Mcp
 import ../../src/server.bend as Server
 import ../../src/rpc.bend as Rpc

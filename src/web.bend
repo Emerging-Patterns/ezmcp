@@ -4,9 +4,9 @@
 # replies. Every POST is answered with one JSON body or 202; there is no SSE
 # stream and no session.
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
-import ezhttp@0.23.0.0/src/http.bend as Http
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
+import ezhttp@0.26.0.0/src/http.bend as Http
 import ./rpc.bend as Rpc
 import ./server.bend as Server
 

@@ -2,8 +2,8 @@
 # response **MUST NOT** set both." Every reply ezmcp builds has `result` and
 # no `error` when it succeeds, and `error` and no `result` when it fails
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
 import ../src/rpc.bend as Rpc
 
 # whether a value has a member and not another

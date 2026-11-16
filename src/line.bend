@@ -3,8 +3,8 @@
 # each whole line is decoded from UTF-8 and is one message; a reply is its
 # JSON text and one newline.
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
 import ./server.bend as Server
 
 # whole lines, each with its newline, and the bytes after the last newline

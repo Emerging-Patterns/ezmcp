@@ -9,8 +9,8 @@
 # ezmcp supports it, and the latest, 2025-11-25, otherwise, including when
 # the request names none; for every request it is a version ezmcp supports
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
 import ../src/server.bend as Server
 
 # LAW: the result's protocolVersion is the negotiated one

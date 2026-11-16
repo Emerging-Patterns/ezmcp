@@ -1,7 +1,7 @@
 # proofs of laws/CapabilitiesFromToolTable.bend
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
 import ../src/server.bend as Server
 import ../laws/CapabilitiesFromToolTable.bend as Laws
 import ./lemmas/BoolCharStringFacts.bend as M1

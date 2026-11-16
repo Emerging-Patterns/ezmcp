@@ -7,8 +7,8 @@
 # laws/PrintIsCompactAndStable.bend) but not for every value built with it,
 # as ezmcp's messages are; for those it is trusted, not proved.
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
 import ../src/line.bend as Line
 
 # LAW: a message on stdout is its JSON text and one newline

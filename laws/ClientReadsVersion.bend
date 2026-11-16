@@ -4,7 +4,7 @@
 # `client.version` reads the revision an initialize result names: for every
 # string `v`, a result whose `protocolVersion` is `v` names `v`
 import Base
-import ezjson@1.2.0.0/main.bend as Json
+import ezjson@1.5.0.0/main.bend as Json
 import ../src/client.bend as Client
 
 # LAW: the revision an initialize result names is its protocolVersion

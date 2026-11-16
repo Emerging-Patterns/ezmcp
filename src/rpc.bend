@@ -3,8 +3,8 @@
 # an invalid request; replies and requests are built here; a reply a client
 # reads back is classified here too.
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
 
 # what one incoming message is (JSON-RPC 2.0 §4, MCP basic#messages)
 type Msg is Data:

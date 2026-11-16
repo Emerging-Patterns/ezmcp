@@ -1,6 +1,6 @@
 # proofs of laws/OperationsFromPaths.bend
 import Base
-import ezjson@1.2.0.0/main.bend as Json
+import ezjson@1.5.0.0/main.bend as Json
 import ../src/openapi.bend as Openapi
 import ../laws/OperationsFromPaths.bend as Laws
 

@@ -1,6 +1,6 @@
 # an array's items are the list it was built from
 import Base
-import ezjson@1.2.0.0/src/value.bend as Value
+import ezjson@1.5.0.0/src/value.bend as Value
 
 # an array's items are the list it was built from
 def eq.items_arr(

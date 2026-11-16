@@ -17,9 +17,9 @@
 #
 # also rests on: laws/RevisionFromVersionHeader.bend
 import Base
-import ezjson@1.2.0.0/main.bend as Json
-import ezjson@1.2.0.0/src/value.bend as Value
-import ezhttp@0.23.0.0/src/http.bend as Http
+import ezjson@1.5.0.0/main.bend as Json
+import ezjson@1.5.0.0/src/value.bend as Value
+import ezhttp@0.26.0.0/src/http.bend as Http
 import ../src/rpc.bend as Rpc
 import ../src/server.bend as Server
 import ../src/web.bend as Web
