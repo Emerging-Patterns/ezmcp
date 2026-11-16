@@ -212,9 +212,9 @@ def http.serve_with(
 ) -> IO(Unit):
   Io.http.serve_with(C, run, srv, path, origins, ctx, addr, limit, max)
 
-# serve the endpoint on host:port, its runner given `ctx`, each connection on
-# its own fork and at most `max` at once (0: no limit; 1: one at a time),
-# until the process is stopped
+# serve the endpoint on `addr`, (host, port), its runner given `ctx`, each
+# connection on its own fork and at most `max` at once (0: no limit; 1: one
+# at a time), until the process is stopped
 @unsafe def http.serve_forever_with(
   ~C: Data,
   ~run: C -> String -> Value.Json -> IO(Rpc.Out),
@@ -222,11 +222,10 @@ def http.serve_with(
   ~path: String,
   ~origins: List<&2, String>,
   +ctx: C,
-  host: String,
-  port: U32,
+  addr: String & U32,
   max: U32
 ) -> IO(Unit):
-  Io.http.serve_forever_with(C, run, srv, path, origins, ctx, host, port, max)
+  Io.http.serve_forever_with(C, run, srv, path, origins, ctx, addr, max)
 
 # --- with the server in the context ---
 #
@@ -263,9 +262,9 @@ def http.serve_from(
 ) -> IO(Unit):
   Io.http.serve_from(C, srv, run, path, origins, ctx, addr, limit, max)
 
-# serve the endpoint on host:port, its server and runner given `ctx`, each
-# connection on its own fork and at most `max` at once (0: no limit), until
-# the process is stopped
+# serve the endpoint on `addr`, (host, port), its server and runner given
+# `ctx`, each connection on its own fork and at most `max` at once (0: no
+# limit), until the process is stopped
 @unsafe def http.serve_forever_from(
   ~C: Data,
   ~srv: C -> Server.Server,
@@ -273,11 +272,10 @@ def http.serve_from(
   ~path: String,
   ~origins: List<&2, String>,
   +ctx: C,
-  host: String,
-  port: U32,
+  addr: String & U32,
   max: U32
 ) -> IO(Unit):
-  Io.http.serve_forever_from(C, srv, run, path, origins, ctx, host, port, max)
+  Io.http.serve_forever_from(C, srv, run, path, origins, ctx, addr, max)
 
 # serve stdin and stdout, its runner given `ctx`, until stdin ends
 @unsafe def stdio.serve_with(

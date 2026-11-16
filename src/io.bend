@@ -175,8 +175,8 @@ def http.serve_with(
     ~(c => req => http.answer(C, run, srv, path, origins, c, req)), ctx, host,
     port, limit, max)
 
-# serve until the process is stopped, at most `max` connections at once
-# (0: no limit)
+# serve on `addr`, (host, port), until the process is stopped, at most `max`
+# connections at once (0: no limit)
 @unsafe def http.serve_forever_with(
   ~C: Data,
   ~run: C -> String -> Value.Json -> IO(Rpc.Out),
@@ -184,10 +184,10 @@ def http.serve_with(
   ~path: String,
   ~origins: List<&2, String>,
   +ctx: C,
-  host: String,
-  port: U32,
+  addr: String & U32,
   +max: U32
 ) -> IO(Unit):
+  (host, port) = addr
   Ez.http.serve_forever_with(~C,
     ~(c => req => http.answer(C, run, srv, path, origins, c, req)), ctx, host,
     port, max)
@@ -232,8 +232,8 @@ def http.serve_from(
     ~(c => req => http.answer_from(C, srv, run, path, origins, c, req)), ctx,
     host, port, limit, max)
 
-# serve until the process is stopped, at most `max` connections at once
-# (0: no limit)
+# serve on `addr`, (host, port), until the process is stopped, at most `max`
+# connections at once (0: no limit)
 @unsafe def http.serve_forever_from(
   ~C: Data,
   ~srv: C -> Server.Server,
@@ -241,10 +241,10 @@ def http.serve_from(
   ~path: String,
   ~origins: List<&2, String>,
   +ctx: C,
-  host: String,
-  port: U32,
+  addr: String & U32,
   +max: U32
 ) -> IO(Unit):
+  (host, port) = addr
   Ez.http.serve_forever_with(~C,
     ~(c => req => http.answer_from(C, srv, run, path, origins, c, req)), ctx,
     host, port, max)
@@ -285,7 +285,7 @@ def http.serve(
   port: U32
 ) -> IO(Unit):
   http.serve_forever_with(~Unit, ~(_c => n => a => run(n, a)), srv, path,
-    origins, Unit{}, host, port, 0)
+    origins, Unit{}, (host, port), 0)
 
 # --- stdio ---
 
