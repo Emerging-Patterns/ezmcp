@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/Emerging-Patterns/ezmcp/compare/v0.3.0...v0.4.0) (2026-11-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* **lint:** the serves that take a context take their address as one `addr: String & U32` pair, `(host, port)`, where they took `host, port`:
+    - `http.serve_with(~C, ~run, ~srv, ~path, ~origins, ctx, addr: String & U32, limit, max)`
+    - `http.serve_from(~C, ~srv, ~run, ~path, ~origins, ctx, addr: String & U32, limit, max)`
+    - `http.serve_forever_with(~C, ~run, ~srv, ~path, ~origins, ctx, addr: String & U32, max)`
+    - `http.serve_forever_from(~C, ~srv, ~run, ~path, ~origins, ctx, addr: String & U32, max)`
+
+### Features
+
+* **lint:** ez 1.16.0, bolt 1.65.0; serves take their address as a (host, port) pair ([#23](https://github.com/Emerging-Patterns/ezmcp/issues/23)) ([ec9fdf7](https://github.com/Emerging-Patterns/ezmcp/commit/ec9fdf7204c6494f9b381199482b16f38128bf50))
+
 ## [0.3.0](https://github.com/Emerging-Patterns/ezmcp/compare/v0.2.0...v0.3.0) (2026-11-09)
 
 
